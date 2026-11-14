@@ -1,0 +1,29 @@
+## Euthopiar Local Configuration Properties
+# Copy this file to local.properties and fill in any keys you wish to use.
+# All fields are optional at build time; leave blank if unused.
+
+# Android SDK Path
+sdk.dir=C:\\Users\\panda\\dev_tools\\android-sdk
+
+# SubDL Subtitle API Key (https://subdl.com)
+SUBDL_API_KEY=
+
+# Trakt.tv API Client Credentials (https://trakt.tv/oauth/applications)
+TRAKT_CLIENT_ID=
+TRAKT_CLIENT_SECRET=
+
+# Simkl Client ID (https://simkl.com/settings/developer/)
+SIMKL_CLIENT_ID=
+
+# The Movie Database (TMDB) API Key (https://www.themoviedb.org/settings/api)
+TMDB_API_KEY=
+
+# Freekz Key Token
+FREEKZ_KEY_TOKEN=
+
+# Supabase Cloud Sync Configuration (https://supabase.com)
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+
+# Google OAuth 2.0 Web Client ID (Google Cloud Console Credentials)
+GOOGLE_WEB_CLIENT_ID=
