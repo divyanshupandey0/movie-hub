@@ -14,8 +14,8 @@ android {
         applicationId = "com.euthopiar"
         minSdk = 26
         targetSdk = 35
-        versionCode = 102
-        versionName = "1.0.2"
+        versionCode = 111
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
