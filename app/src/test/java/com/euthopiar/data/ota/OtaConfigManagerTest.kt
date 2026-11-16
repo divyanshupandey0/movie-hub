@@ -184,4 +184,30 @@ class OtaConfigManagerTest {
         assertTrue(otaManager.isAnnouncementDismissed(testId))
         assertTrue(otaManager.dismissedAnnouncementIds.value.contains(testId))
     }
+
+    @Test
+    fun testProductionRemoteConfigFileStructure() {
+        val candidates = listOf(
+            java.io.File("../remote-config.json"),
+            java.io.File("remote-config.json"),
+            java.io.File("../../remote-config.json")
+        )
+        val file = candidates.firstOrNull { it.exists() }
+        assertNotNull("remote-config.json should be present in project hierarchy", file)
+        val jsonText = file!!.readText()
+
+        val result = OtaConfigParser.parseAndValidate(jsonText, currentAppVersion = "2.0.1")
+        assertTrue("Repository remote-config.json must be valid", result is OtaValidationResult.Success)
+
+        val config = (result as OtaValidationResult.Success).config
+        assertEquals(1, config.configVersion)
+        assertEquals("production-v1", config.configName)
+        assertEquals("1.1.0", config.minSupportedAppVersion)
+        assertTrue(config.announcement.enabled)
+        assertEquals("Welcome to MOVIE HUB", config.announcement.title)
+        assertFalse(config.maintenance.enabled)
+        assertTrue(config.isFeatureEnabled("enable_live_scraper_tester"))
+        assertEquals("Top 10 Today", config.getUiText("home_top_ten_title", "Fallback"))
+        assertEquals("Updated daily", config.getUiText("home_top_ten_subtitle", "Fallback"))
+    }
 }
