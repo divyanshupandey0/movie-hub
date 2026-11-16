@@ -187,6 +187,65 @@ class AppUpdateManagerTest {
                 remoteVersionName = "1.0.2"
             )
         )
+
+        // Production verification: installed 1.1.3 (code 113) upgrading to 2.0.1 (code 114)
+        assertTrue(
+            "Installed 1.1.3 (code 113) must detect v2.0.1 (code 114) as a new update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 113,
+                remoteVersionCode = 114,
+                currentVersionName = "1.1.3",
+                remoteVersionName = "2.0.1"
+            )
+        )
+
+        assertFalse(
+            "Installed 2.0.1 (code 114) must NOT detect release 2.0.1 (code 114) as an update (no repeated update bug)",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 114,
+                remoteVersionCode = 114,
+                currentVersionName = "2.0.1",
+                remoteVersionName = "2.0.1"
+            )
+        )
+
+        assertFalse(
+            "Installed 2.0.1 (code 114) must not downgrade to release 1.1.3 (code 113)",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 114,
+                remoteVersionCode = 113,
+                currentVersionName = "2.0.1",
+                remoteVersionName = "1.1.3"
+            )
+        )
+    }
+
+    @Test
+    fun testVersion201ReleaseParsingFromGitHubApi() {
+        val githubApiResponse = JSONObject().apply {
+            put("tag_name", "v2.0.1")
+            put("name", "MOVIE HUB v2.0.1 – Stable Update")
+            put("body", "### MOVIE HUB v2.0.1 – Stable Update\n\n- Package: com.euthopiar\n- versionCode: 114")
+            put("html_url", "https://github.com/divyanshupandey0/movie-hub/releases/tag/v2.0.1")
+            put("published_at", "2026-11-16T22:24:00Z")
+            put("prerelease", false)
+            val assetsArray = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("name", "MOVIE-HUB-v2.0.1.apk")
+                    put("browser_download_url", "https://github.com/divyanshupandey0/movie-hub/releases/download/v2.0.1/MOVIE-HUB-v2.0.1.apk")
+                    put("size", 49644741L)
+                })
+            }
+            put("assets", assetsArray)
+        }
+
+        val releaseInfo = updateManager.parseGitHubReleaseApi(githubApiResponse)
+        assertEquals("v2.0.1", releaseInfo.tagName)
+        assertEquals("2.0.1", releaseInfo.versionName)
+        assertEquals(114, releaseInfo.versionCode)
+        assertEquals("MOVIE HUB v2.0.1 – Stable Update", releaseInfo.releaseTitle)
+        assertEquals("https://github.com/divyanshupandey0/movie-hub/releases/download/v2.0.1/MOVIE-HUB-v2.0.1.apk", releaseInfo.apkDownloadUrl)
+        assertEquals(49644741L, releaseInfo.apkSizeBytes)
     }
 
     @Test

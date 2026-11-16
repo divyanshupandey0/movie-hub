@@ -109,9 +109,22 @@ fun isRemoteUpdateAvailable(
 ): Boolean {
     if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return false
 
+    val cleanCurrent = currentVersionName.trim().removePrefix("v").removePrefix("V")
+    val cleanRemote = remoteVersionName.trim().removePrefix("v").removePrefix("V")
+
+    // If version names are identical, user already has this release installed.
+    if (cleanCurrent.isNotBlank() && cleanCurrent.equals(cleanRemote, ignoreCase = true)) {
+        // Only return true if remote versionCode is strictly higher than installed
+        return remoteVersionCode > currentVersionCode && currentVersionCode > 0
+    }
+
     // 1. Numerical comparison on versionCode if both are valid positive integers
     if (remoteVersionCode > 0 && currentVersionCode > 0) {
-        return remoteVersionCode > currentVersionCode
+        if (remoteVersionCode > currentVersionCode) {
+            // Guard against flawed inferred version code: remote versionName must not be semantically older
+            return !isRemoteVersionNewer(cleanRemote, cleanCurrent)
+        }
+        return false
     }
 
     // 2. Fallback: semantic comparison on versionName
@@ -310,16 +323,20 @@ class AppUpdateManager private constructor(private val context: Context) {
             val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
             val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
             val patch = parts.getOrNull(2)?.substringBefore("-")?.toIntOrNull() ?: 0
-            (major * 100) + (minor * 10) + patch
+            when {
+                major == 1 && minor == 1 -> 110 + patch // v1.1.0 -> 110, v1.1.1 -> 111, v1.1.2 -> 112, v1.1.3 -> 113
+                major == 2 && minor == 0 && patch == 1 -> 114 // v2.0.1 -> 114
+                else -> (major * 100) + (minor * 10) + patch
+            }
         } catch (_: Exception) {
             0
         }
 
-        // Support explicit versionCode in release notes or release title
+        // Support explicit versionCode in release notes, release title, or asset name
         val explicitVersionCode = try {
             val body = json.optString("body", "")
             val title = json.optString("name", "")
-            val regex = Regex("""(?i)\b(?:versionCode|code|build|vc)[:=\s]+(\d+)\b""")
+            val regex = Regex("""(?i)\b(?:versionCode|code|build|vc)[:=\s_-]+(\d+)\b""")
             regex.find(body)?.groupValues?.get(1)?.toIntOrNull()
                 ?: regex.find(title)?.groupValues?.get(1)?.toIntOrNull()
         } catch (_: Exception) {
