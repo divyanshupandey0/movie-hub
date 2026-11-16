@@ -39,20 +39,7 @@ object AppUpdateConfig {
     const val GITHUB_REPO = "movie-hub"
     const val GITHUB_REPO_URL = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
     const val GITHUB_RELEASES_URL = "$GITHUB_REPO_URL/releases"
-
-    /**
-     * Primary remote update endpoints on the user's GitHub repository.
-     * We support both movie-hub and moviehub URLs seamlessly as primary/fallback.
-     */
-    val GITHUB_VERSION_JSON_URLS = listOf(
-        "https://raw.githubusercontent.com/$GITHUB_OWNER/movie-hub/main/version.json",
-        "https://raw.githubusercontent.com/$GITHUB_OWNER/moviehub/main/version.json"
-    )
-
-    val GITHUB_RELEASES_API_URLS = listOf(
-        "https://api.github.com/repos/$GITHUB_OWNER/movie-hub/releases/latest",
-        "https://api.github.com/repos/$GITHUB_OWNER/moviehub/releases/latest"
-    )
+    const val GITHUB_LATEST_RELEASE_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 }
 
 @Immutable
@@ -121,9 +108,6 @@ fun isRemoteUpdateAvailable(
     remoteVersionName: String
 ): Boolean {
     if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return false
-    if (remoteVersionCode > 0 && currentVersionCode > 0) {
-        return remoteVersionCode > currentVersionCode
-    }
     return isRemoteVersionNewer(currentVersionName, remoteVersionName)
 }
 
@@ -212,75 +196,29 @@ class AppUpdateManager private constructor(private val context: Context) {
             var lastErrorMessage: String? = null
             var resolvedRelease: ReleaseInfo? = null
 
-            // 1. First priority: Check version.json from user's GitHub repository
-            val versionJsonUrls = AppUpdateConfig.GITHUB_VERSION_JSON_URLS
             val client = DohDns.sharedBaseClient
 
-            for (url in versionJsonUrls) {
-                try {
-                    val request = Request.Builder()
-                        .url(url)
-                        .header("Accept", "application/json")
-                        .header("User-Agent", "MOVIE-HUB-Android/${getCurrentVersionName()}")
-                        .build()
+            try {
+                val request = Request.Builder()
+                    .url(AppUpdateConfig.GITHUB_LATEST_RELEASE_API_URL)
+                    .header("Accept", "application/vnd.github+json")
+                    .header("User-Agent", "MOVIE-HUB-Android/$currentVersion")
+                    .build()
 
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string()
-                            if (!body.isNullOrBlank()) {
-                                val manifest = parseVersionJson(JSONObject(body))
-                                resolvedRelease = ReleaseInfo(
-                                    tagName = if (manifest.versionName.startsWith("v", ignoreCase = true)) manifest.versionName else "v${manifest.versionName}",
-                                    versionName = manifest.versionName,
-                                    versionCode = manifest.versionCode,
-                                    releaseTitle = "MOVIE HUB v${manifest.versionName}",
-                                    changelog = manifest.releaseNotes,
-                                    publishedAt = "Latest GitHub Release",
-                                    htmlUrl = AppUpdateConfig.GITHUB_RELEASES_URL,
-                                    apkDownloadUrl = manifest.downloadUrl,
-                                    apkSizeBytes = 0L,
-                                    isPrerelease = false,
-                                    isMandatory = currentVersionCode < manifest.minimumSupportedVersion,
-                                    minSupportedVersionCode = manifest.minimumSupportedVersion
-                                )
-                                return@use
-                            }
-                        } else if (response.code != 404) {
-                            lastErrorMessage = "GitHub returned HTTP ${response.code}"
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (!body.isNullOrBlank()) {
+                            resolvedRelease = parseGitHubReleaseApi(JSONObject(body))
+                        } else {
+                            lastErrorMessage = "Empty response received from GitHub Releases API"
                         }
+                    } else {
+                        lastErrorMessage = "GitHub Releases API returned HTTP ${response.code}"
                     }
-                } catch (e: Exception) {
-                    lastErrorMessage = e.message
                 }
-                if (resolvedRelease != null) break
-            }
-
-            // 2. Second priority (Fallback): Query GitHub Releases API directly on user's repo
-            if (resolvedRelease == null) {
-                for (apiUrl in AppUpdateConfig.GITHUB_RELEASES_API_URLS) {
-                    try {
-                        val request = Request.Builder()
-                            .url(apiUrl)
-                            .header("Accept", "application/vnd.github+json")
-                            .header("User-Agent", "MOVIE-HUB-Android/${getCurrentVersionName()}")
-                            .build()
-
-                        client.newCall(request).execute().use { response ->
-                            if (response.isSuccessful) {
-                                val body = response.body?.string()
-                                if (!body.isNullOrBlank()) {
-                                    resolvedRelease = parseGitHubReleaseApi(JSONObject(body))
-                                    return@use
-                                }
-                            } else {
-                                lastErrorMessage = "GitHub Releases API returned HTTP ${response.code}"
-                            }
-                        }
-                    } catch (e: Exception) {
-                        lastErrorMessage = e.message
-                    }
-                    if (resolvedRelease != null) break
-                }
+            } catch (e: Exception) {
+                lastErrorMessage = e.message ?: "Network connection failed"
             }
 
             preferencesRepository.setLastUpdateCheckTimestamp(System.currentTimeMillis())
@@ -316,28 +254,10 @@ class AppUpdateManager private constructor(private val context: Context) {
         }
     }
 
-    fun parseVersionJson(json: JSONObject): GitHubVersionManifest {
-        val versionCode = json.optInt("versionCode", 0)
-        val versionName = json.optString("versionName", "").trim()
-        val downloadUrl = json.optString("downloadUrl", "").trim()
-        val releaseNotes = json.optString("releaseNotes", "Bug fixes and performance improvements.")
-        val isUpdateAvailableFlag = json.optBoolean("isUpdateAvailable", true)
-        val minimumSupportedVersion = json.optInt("minimumSupportedVersion", 1)
-
-        return GitHubVersionManifest(
-            versionCode = versionCode,
-            versionName = versionName,
-            downloadUrl = downloadUrl,
-            releaseNotes = releaseNotes,
-            isUpdateAvailableFlag = isUpdateAvailableFlag,
-            minimumSupportedVersion = minimumSupportedVersion
-        )
-    }
-
-    private fun parseGitHubReleaseApi(json: JSONObject): ReleaseInfo {
-        val tagName = json.optString("tag_name", "v1.0.0")
+    fun parseGitHubReleaseApi(json: JSONObject): ReleaseInfo {
+        val tagName = json.optString("tag_name", "").trim()
         val versionName = tagName.removePrefix("v").removePrefix("V")
-        val releaseTitle = json.optString("name", "MOVIE HUB $tagName")
+        val releaseTitle = json.optString("name", if (tagName.isNotBlank()) "MOVIE HUB $tagName" else "MOVIE HUB Release")
         val changelog = json.optString("body", "Bug fixes and performance improvements.")
         val publishedAt = json.optString("published_at", "Recently")
         val htmlUrl = json.optString("html_url", AppUpdateConfig.GITHUB_RELEASES_URL)
@@ -352,14 +272,16 @@ class AppUpdateManager private constructor(private val context: Context) {
                 val asset = assets.getJSONObject(i)
                 val assetName = asset.optString("name", "")
                 if (assetName.endsWith(".apk", ignoreCase = true)) {
-                    apkDownloadUrl = asset.optString("browser_download_url", null)
-                    apkSizeBytes = asset.optLong("size", 0L)
-                    break
+                    val url = asset.optString("browser_download_url", null)
+                    if (url != null && (url.contains("github.com") || url.startsWith("https://"))) {
+                        apkDownloadUrl = url
+                        apkSizeBytes = asset.optLong("size", 0L)
+                        break
+                    }
                 }
             }
         }
 
-        // Infer a versionCode if not specified in tag
         val inferredVersionCode = try {
             val parts = versionName.split(".")
             val major = parts.getOrNull(0)?.toIntOrNull() ?: 1

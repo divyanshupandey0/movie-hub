@@ -187,7 +187,7 @@ class PreferencesKeyMappingTest {
         assertEquals(testTimestamp, updatedTimestamp)
 
         // Verify DonationConfig
-        assertEquals("https://buymeacoffee.com/TheARCreactorGUY", com.euthopiar.data.common.DonationConfig.BUY_ME_A_COFFEE_URL)
+        assertEquals("https://github.com/divyanshupandey0/movie-hub", com.euthopiar.data.common.DonationConfig.BUY_ME_A_COFFEE_URL)
         assertEquals(24L * 60L * 60L * 1000L, com.euthopiar.data.common.DonationConfig.COOLDOWN_MS)
     }
 
@@ -196,7 +196,7 @@ class PreferencesKeyMappingTest {
         val entries = com.euthopiar.ui.settings.search.getAllSettingsSearchEntries()
         val supportEntry = entries.firstOrNull { it.id == "support_euthopiar" }
         assertNotNull("support_euthopiar search entry must be present", supportEntry)
-        assertEquals("Support Euthopiar", supportEntry!!.title)
+        assertEquals("Support MOVIE HUB", supportEntry!!.title)
         assertEquals(com.euthopiar.ui.settings.models.SettingsCategory.About, supportEntry.category)
         assertEquals(com.euthopiar.ui.settings.models.SettingsPage.About, supportEntry.page)
 

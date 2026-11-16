@@ -1,8 +1,0 @@
-{
-  "versionCode": 12,
-  "versionName": "1.2.0",
-  "downloadUrl": "https://github.com/divyanshupandey0/movie-hub/releases/download/v1.0.0/MOVIE-HUB-v1.0.0.apk",
-  "releaseNotes": "## What's New in MOVIE HUB\n* **Direct GitHub Remote Updates:** Automatic update notifications directly from your official GitHub repository.\n* **Fast In-App APK Download:** Real-time download progress bar and direct package installer launch.\n* **Performance & Stability:** Polished UI and streaming engine optimizations.",
-  "isUpdateAvailable": true,
-  "minimumSupportedVersion": 1
-}
