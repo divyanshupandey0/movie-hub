@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.widget.Toast
 import com.euthopiar.data.sync.supabase.SupabaseSyncManager
-import com.moviehub.R
+import com.euthopiar.R
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler

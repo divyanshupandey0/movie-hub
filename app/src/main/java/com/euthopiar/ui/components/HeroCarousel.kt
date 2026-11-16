@@ -103,7 +103,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.request.transformations
-import com.moviehub.R
+import com.euthopiar.R
 import com.euthopiar.core.model.MediaItem
 import com.euthopiar.core.model.MediaType
 import com.euthopiar.data.local.PlaybackHistoryEntity

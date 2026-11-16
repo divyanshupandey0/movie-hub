@@ -2,7 +2,7 @@ package com.euthopiar.ui.util
 
 import android.content.Context
 import androidx.annotation.StringRes
-import com.moviehub.R
+import com.euthopiar.R
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException

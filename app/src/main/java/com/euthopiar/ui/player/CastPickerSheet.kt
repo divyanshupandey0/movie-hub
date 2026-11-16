@@ -30,7 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.moviehub.R
+import com.euthopiar.R
 import com.euthopiar.core.model.StreamSource
 import com.euthopiar.ui.components.AppBottomSheet
 import com.euthopiar.ui.components.LocalSnackbarController

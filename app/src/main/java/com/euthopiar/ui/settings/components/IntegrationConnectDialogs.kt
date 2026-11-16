@@ -66,7 +66,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import com.moviehub.R
+import com.euthopiar.R
 import com.euthopiar.ui.settings.plugins.pluginsPressable
 import com.euthopiar.ui.theme.AppFontFamily
 import com.euthopiar.ui.theme.EuthopiarGlassTokens

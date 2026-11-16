@@ -45,12 +45,9 @@ import com.euthopiar.ui.theme.EuthopiarTheme
 class MainActivity : ComponentActivity() {
 
     companion object {
-        const val ACTION_PIP_PLAY_PAUSE = "com.moviehub.PIP_PLAY_PAUSE"
-        const val ACTION_PIP_REWIND = "com.moviehub.PIP_REWIND"
-        const val ACTION_PIP_FAST_FORWARD = "com.moviehub.PIP_FAST_FORWARD"
-        const val LEGACY_ACTION_PIP_PLAY_PAUSE = "com.euthopiar.PIP_PLAY_PAUSE"
-        const val LEGACY_ACTION_PIP_REWIND = "com.euthopiar.PIP_REWIND"
-        const val LEGACY_ACTION_PIP_FAST_FORWARD = "com.euthopiar.PIP_FAST_FORWARD"
+        const val ACTION_PIP_PLAY_PAUSE = "com.euthopiar.PIP_PLAY_PAUSE"
+        const val ACTION_PIP_REWIND = "com.euthopiar.PIP_REWIND"
+        const val ACTION_PIP_FAST_FORWARD = "com.euthopiar.PIP_FAST_FORWARD"
 
         private var hasShownSplashInProcess: Boolean = false
         private var pendingCredentialCallback: ((Boolean) -> Unit)? = null
@@ -82,16 +79,16 @@ class MainActivity : ComponentActivity() {
     private val pipReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
-                ACTION_PIP_PLAY_PAUSE, LEGACY_ACTION_PIP_PLAY_PAUSE -> {
+                ACTION_PIP_PLAY_PAUSE -> {
                     PipController.onTogglePlayPause?.invoke()
                     val newIsPlaying = PipController.isPlaying()
                     updatePipActions(newIsPlaying)
                 }
-                ACTION_PIP_REWIND, LEGACY_ACTION_PIP_REWIND -> {
+                ACTION_PIP_REWIND -> {
                     val delta = PipController.seekIntervalMs
                     PipController.onSeekRelative?.invoke(-delta)
                 }
-                ACTION_PIP_FAST_FORWARD, LEGACY_ACTION_PIP_FAST_FORWARD -> {
+                ACTION_PIP_FAST_FORWARD -> {
                     val delta = PipController.seekIntervalMs
                     PipController.onSeekRelative?.invoke(delta)
                 }
@@ -154,14 +151,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Register PiP action receiver (supports both com.moviehub and legacy com.euthopiar)
+        // Register PiP action receiver
         val filter = IntentFilter().apply {
             addAction(ACTION_PIP_PLAY_PAUSE)
             addAction(ACTION_PIP_REWIND)
             addAction(ACTION_PIP_FAST_FORWARD)
-            addAction(LEGACY_ACTION_PIP_PLAY_PAUSE)
-            addAction(LEGACY_ACTION_PIP_REWIND)
-            addAction(LEGACY_ACTION_PIP_FAST_FORWARD)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.registerReceiver(this, pipReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)

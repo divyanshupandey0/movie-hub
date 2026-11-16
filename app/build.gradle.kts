@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.moviehub"
+    namespace = "com.euthopiar"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.moviehub"
+        applicationId = "com.euthopiar"
         minSdk = 26
         targetSdk = 35
         versionCode = 112

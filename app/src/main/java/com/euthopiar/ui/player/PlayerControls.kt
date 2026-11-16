@@ -173,7 +173,7 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.TextStyle
-import com.moviehub.R
+import com.euthopiar.R
 import com.euthopiar.ui.components.SecondaryButton
 import com.euthopiar.ui.components.tvFocusable
 import com.euthopiar.ui.theme.AppTypography

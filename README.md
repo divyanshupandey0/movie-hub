@@ -170,22 +170,14 @@ The **Ecosystem & Plugins** engine gives MOVIE HUB its unmatched modular power:
 
 ## 🛠️ TECH STACK & ARCHITECTURE
 
-- **Application ID:** `com.moviehub`
-- **Application Name:** MOVIE HUB
-- **Target Android SDK:** Android 15 (API 35) · Compile SDK 36
-- **Minimum Android SDK:** Android 8.0 Oreo (API 26)
 - **Language:** [Kotlin](https://kotlinlang.org/) (100% Kotlin codebase)
 - **UI Framework:** [Jetpack Compose](https://developer.android.com/jetpack/compose) with Material 3 Design
 - **Architecture:** Clean Architecture + MVVM (Model-View-ViewModel) + Unidirectional Data Flow
 - **Media Engine:** [AndroidX Media3 / ExoPlayer](https://developer.android.com/media/media3)
 - **Asynchronous Flow:** Kotlin Coroutines & StateFlow
-- **Networking:** Ktor & OkHttp with DNS-over-HTTPS (DoH)
+- **Networking:** Ktor & OkHttp with custom scraper decoders
 - **Local Persistence:** Room Database & Jetpack DataStore Preferences
-- **Update System:** Dual-tier Over-The-Air (OTA) Remote Config + GitHub Releases APK Updater
-
-> [!IMPORTANT]
-> **Package Migration Notice:**
-> Starting with version 1.1.2+, MOVIE HUB standardizes on the package identity `com.moviehub`. Due to Android OS security sandboxing, an APK with package `com.moviehub` installs as a new application alongside legacy installs (`com.euthopiar`). Settings and watchlists synchronize seamlessly between devices and installs via Supabase and Trakt cloud sync.
+- **Update System:** GitHub Releases API client with automated version comparison
 
 ---
 

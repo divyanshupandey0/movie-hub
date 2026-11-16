@@ -3,7 +3,7 @@ package com.euthopiar.data.profile
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
-import com.moviehub.R
+import com.euthopiar.R
 import com.euthopiar.ui.theme.PureWhite
 import com.euthopiar.ui.theme.StarGold
 import kotlinx.coroutines.flow.MutableStateFlow

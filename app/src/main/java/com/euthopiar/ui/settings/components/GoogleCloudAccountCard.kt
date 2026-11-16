@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.moviehub.R
+import com.euthopiar.R
 import com.euthopiar.data.preferences.PreferencesRepository
 import com.euthopiar.data.sync.supabase.SupabaseSyncManager
 import com.euthopiar.data.sync.supabase.SyncStatus

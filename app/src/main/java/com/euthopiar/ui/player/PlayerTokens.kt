@@ -50,7 +50,7 @@ import com.euthopiar.ui.theme.AppFontFamily
 import com.euthopiar.ui.theme.HairlineWidth
 import com.euthopiar.ui.theme.LocalAmoledMode
 import com.euthopiar.ui.theme.LocalReduceMotion
-import com.moviehub.R
+import com.euthopiar.R
 
 /**
  * Standard Design Tokens and Glass Recipes for the Euthopiar Video Player.
