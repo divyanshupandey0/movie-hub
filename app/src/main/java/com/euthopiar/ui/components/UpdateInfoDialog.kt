@@ -376,7 +376,7 @@ fun UpdateInfoDialog(
         }
     }
 
-    BackHandler { dismissWithAnim() }
+    BackHandler(enabled = !release.isMandatory) { dismissWithAnim() }
 
     val animValue = dialogProgress.value
     val scrimAlpha = if (reduceMotion) 0.65f else (0.65f * animValue).coerceIn(0f, 0.65f)
@@ -398,7 +398,11 @@ fun UpdateInfoDialog(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = dismissWithAnim
+                onClick = {
+                    if (!release.isMandatory) {
+                        dismissWithAnim()
+                    }
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -698,6 +702,8 @@ fun UpdateInfoDialog(
                                 onClick = {
                                     if (isReadyToInstall) {
                                         onTriggerInstall((downloadState as ApkDownloadState.ReadyToInstall).apkFile, release.htmlUrl)
+                                    } else if (downloadState is ApkDownloadState.Error) {
+                                        onDownloadAndInstall(release)
                                     } else {
                                         onDownloadAndInstall(release)
                                     }
@@ -728,9 +734,10 @@ fun UpdateInfoDialog(
                             } else {
                                 val primaryText = when {
                                     isReadyToInstall -> "Install Update"
+                                    downloadState is ApkDownloadState.Error -> "Retry Download"
                                     release.apkDownloadUrl != null && isNewerUpdate -> "Download Now"
                                     release.apkDownloadUrl != null -> "Download APK"
-                                    else -> "View on GitHub"
+                                    else -> "View Release Page"
                                 }
                                 Text(
                                     text = primaryText,
@@ -748,58 +755,73 @@ fun UpdateInfoDialog(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // Secondary Quiet Text Button: Remind Me Later
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .settingsPressable(onClick = dismissWithAnim)
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
+                    if (!release.isMandatory) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = if (isNewerUpdate) "Remind Me Later" else "Close",
-                                style = TextStyle(
-                                    fontFamily = AppFontFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.5.sp,
-                                    color = SettingsTokens.TextWhite72
-                                )
-                            )
-                        }
-
-                        if (isNewerUpdate) {
-                            Text(
-                                text = "·",
-                                style = TextStyle(color = SettingsTokens.TextWhite42, fontSize = 13.sp),
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            )
-
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .settingsPressable(
-                                        onClick = {
-                                            onSkipVersion(release.versionName)
-                                            dismissWithAnim()
-                                        }
-                                    )
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    .settingsPressable(onClick = dismissWithAnim)
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Skip Version",
+                                    text = if (isNewerUpdate) "Remind Me Later" else "Close",
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
-                                        fontWeight = FontWeight.Normal,
-                                        fontSize = 12.5.sp,
-                                        color = SettingsTokens.TextWhite45
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 13.5.sp,
+                                        color = SettingsTokens.TextWhite72
                                     )
                                 )
                             }
+
+                            if (isNewerUpdate) {
+                                Text(
+                                    text = "·",
+                                    style = TextStyle(color = SettingsTokens.TextWhite42, fontSize = 13.sp),
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .settingsPressable(
+                                            onClick = {
+                                                onSkipVersion(release.versionName)
+                                                dismissWithAnim()
+                                            }
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Skip Version",
+                                        style = TextStyle(
+                                            fontFamily = AppFontFamily,
+                                            fontWeight = FontWeight.Normal,
+                                            fontSize = 12.5.sp,
+                                            color = SettingsTokens.TextWhite45
+                                        )
+                                    )
+                                }
+                            }
                         }
+                    } else {
+                        // Notice for Mandatory Updates
+                        Text(
+                            text = "This update contains essential security or platform fixes and is required.",
+                            style = TextStyle(
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 11.5.sp,
+                                color = SettingsTokens.TextWhite45
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                        )
                     }
                 }
             }

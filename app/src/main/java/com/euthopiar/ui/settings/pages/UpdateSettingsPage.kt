@@ -196,11 +196,11 @@ fun UpdateSettingsPage(
                     hazeState = hazeState
                 )
                 SettingsMetadataChip(
-                    text = if (includePrereleases) "Pre-release Channel" else "Stable Channel",
+                    text = "Official Manifest",
                     hazeState = hazeState
                 )
                 SettingsMetadataChip(
-                    text = "GitHub Releases",
+                    text = "PackageInstaller",
                     hazeState = hazeState
                 )
             }
@@ -249,7 +249,7 @@ fun UpdateSettingsPage(
 
         OpenSettingsToggleRow(
             title = "Automatic Update Checks",
-            subtitle = "Check GitHub Releases automatically when launching MOVIE HUB",
+            subtitle = "Check official release endpoint automatically when launching MOVIE HUB",
             checked = autoCheckUpdates,
             onCheckedChange = { enabled ->
                 scope.launch {
@@ -277,7 +277,7 @@ fun UpdateSettingsPage(
 
         if (displayRelease != null) {
             OpenSettingsRow(
-                title = "Latest GitHub Release",
+                title = "Latest Remote Release",
                 subtitle = "${displayRelease.releaseTitle} (${displayRelease.tagName}) · Published ${displayRelease.publishedAt}",
                 onClick = {
                     activeDialogRelease = displayRelease
@@ -337,10 +337,10 @@ fun UpdateSettingsPage(
         } else {
             OpenSettingsRow(
                 title = "Release Feed",
-                subtitle = "Tap 'Check for Updates' above to query GitHub Releases",
+                subtitle = "Tap 'Check for Updates' above to query release manifest",
                 trailingContent = {
                     SettingsMetadataChip(
-                        text = "GitHub API",
+                        text = "HTTPS Manifest",
                         hazeState = hazeState
                     )
                 }

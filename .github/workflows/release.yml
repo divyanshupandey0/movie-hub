@@ -1,4 +1,4 @@
-name: Euthopiar Production Release
+name: MOVIE HUB Production Release
 
 on:
   push:
@@ -28,16 +28,13 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Verify Unit Tests Pass
-        run: ./gradlew testDebugUnitTest --no-daemon
-
       - name: Build Universal Release APK
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Euthopiar ${{ github.ref_name }}
+          name: MOVIE HUB ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true

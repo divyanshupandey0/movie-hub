@@ -10,7 +10,7 @@
 ## 1. Information Collection & Storage
 * **Zero Personal Data Collection:** MOVIE HUB does not collect, log, track, or transmit your personal information, IP addresses, or browsing history to any centralized or private servers.
 * **On-Device Storage:** All preferences, cached metadata, and local watch progress remain stored strictly on your local device storage.
-* **Open Source Transparency:** The entire source code of MOVIE HUB is publicly available on [GitHub](https://github.com/TheARCreactorGUY/Euthopiar).
+* **Open Source Transparency:** The entire source code of MOVIE HUB is publicly available on [GitHub](https://github.com/divyanshupandey0/movie-hub).
 
 ---
 
@@ -37,4 +37,4 @@ You can disconnect third-party integrations at any time:
 ---
 
 ## 4. Contact & Inquiries
-If you have questions or feedback regarding this privacy policy, please open an issue on our [GitHub Issues](https://github.com/TheARCreactorGUY/Euthopiar/issues) page.
+If you have questions or feedback regarding this privacy policy, please open an issue on our [GitHub Issues](https://github.com/divyanshupandey0/movie-hub/issues) page.

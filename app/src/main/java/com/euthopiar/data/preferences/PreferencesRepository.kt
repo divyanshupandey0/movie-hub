@@ -152,6 +152,7 @@ class PreferencesRepository private constructor(private val context: Context) {
         val INCLUDE_PRERELEASES = booleanPreferencesKey("include_prereleases")
         val SKIPPED_UPDATE_VERSION = stringPreferencesKey("skipped_update_version")
         val LAST_UPDATE_CHECK_TIMESTAMP = longPreferencesKey("last_update_check_timestamp")
+        val CUSTOM_UPDATE_MANIFEST_URL = stringPreferencesKey("custom_update_manifest_url")
 
         // 1.5 Support & Donation Preferences
         val LAST_DONATION_PROMPT_TIMESTAMP = longPreferencesKey("last_donation_prompt_timestamp")
@@ -1110,6 +1111,20 @@ class PreferencesRepository private constructor(private val context: Context) {
     suspend fun setLastUpdateCheckTimestamp(timestampMs: Long) {
         context.preferencesDataStore.edit { preferences ->
             preferences[PreferencesKeys.LAST_UPDATE_CHECK_TIMESTAMP] = timestampMs
+        }
+    }
+
+    val customUpdateManifestUrl: Flow<String> = context.preferencesDataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CUSTOM_UPDATE_MANIFEST_URL] ?: ""
+        }
+
+    suspend fun setCustomUpdateManifestUrl(url: String) {
+        context.preferencesDataStore.edit { preferences ->
+            preferences[PreferencesKeys.CUSTOM_UPDATE_MANIFEST_URL] = url
         }
     }
 

@@ -153,8 +153,24 @@ fun HomeScreen(
         }
     }
 
-    // Automatic update check temporarily removed/disabled
-    // Auto-popup update dialog temporarily removed/disabled
+    // Automatic non-blocking update check on app launch
+    LaunchedEffect(autoCheckUpdates) {
+        if (autoCheckUpdates && updateState is UpdateCheckState.Idle) {
+            updateManager.checkForUpdates(forceManual = false)
+        }
+    }
+
+    // Auto-popup update dialog once per app session when update is available and not skipped (or mandatory)
+    LaunchedEffect(updateState, skippedUpdateVersion, autoPopupShown) {
+        val available = updateState as? UpdateCheckState.UpdateAvailable
+        if (available != null) {
+            val shouldShow = available.isMandatory || (!autoPopupShown && available.release.versionName != skippedUpdateVersion)
+            if (shouldShow && !showUpdateDialog) {
+                showUpdateDialog = true
+                updateManager.markAutoPopupShownForSession()
+            }
+        }
+    }
 
     // Home Donation Reminder Evaluation (New Install first content load, Post-App Update, 24-Hour Cooldown)
     var donationEvaluatedThisSession by rememberSaveable { mutableStateOf(false) }
@@ -736,10 +752,15 @@ fun HomeScreen(
                 registry = registry,
                 scrollFraction = { headerScrollFraction },
                 hazeState = if (isPreviewActive) null else homeHazeState,
-                hasUpdateAvailable = false,
-                onUpdateBadgeClick = null
+                hasUpdateAvailable = updateState is UpdateCheckState.UpdateAvailable,
+                onUpdateBadgeClick = { showUpdateDialog = true }
             )
             OfflineBanner()
+            HomeUpdateBanner(
+                hazeState = if (isPreviewActive) null else homeHazeState,
+                onOpenUpdatePopup = { _, _ -> showUpdateDialog = true },
+                onDismiss = { updateManager.dismissBannerForSession() }
+            )
         }
 
     // Long-Press Quick Actions Host (sits on top of blurred hazeSource content)
@@ -874,7 +895,25 @@ fun HomeScreen(
         )
     }
 
-    // Application Update Information Popup temporarily disabled
+    // Application Update Information Popup
+    if (showUpdateDialog) {
+        val available = updateState as? UpdateCheckState.UpdateAvailable
+        if (available != null) {
+            UpdateInfoDialog(
+                release = available.release,
+                currentVersion = available.currentVersion,
+                downloadState = downloadState,
+                hazeState = homeHazeState,
+                onDismiss = { showUpdateDialog = false },
+                onDownloadAndInstall = { rel -> updateManager.downloadAndInstallUpdate(rel) },
+                onTriggerInstall = { file, fallbackUrl -> updateManager.triggerInstallApk(file, fallbackUrl) },
+                onSkipVersion = { version ->
+                    updateManager.skipVersion(version)
+                    showUpdateDialog = false
+                }
+            )
+        }
+    }
 
     // Home Donation Reminder Popup
     if (showDonationDialog && !showUpdateDialog) {

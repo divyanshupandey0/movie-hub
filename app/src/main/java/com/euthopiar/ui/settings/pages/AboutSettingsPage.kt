@@ -49,13 +49,13 @@ import com.euthopiar.ui.theme.EuthopiarMotionTokens
 import com.euthopiar.ui.theme.LocalReduceMotion
 
 /**
- * Redesigned "About Euthopiar" Settings Screen.
+ * Redesigned "About MOVIE HUB" Settings Screen.
  *
  * Strict High-Fidelity Design Specifications:
  * - Editorial Top Bar with 40x40dp glass back button & crossfading collapsed title.
- * - Bold 32sp Medium headline ("About Euthopiar").
+ * - Bold 32sp Medium headline ("About MOVIE HUB").
  * - Hero Brand Block: 52x52dp glass emblem with 24dp pure white outline heart,
- *   EUTHOPIAR brand typography, and dynamic version glass chip.
+ *   MOVIE HUB brand typography, and dynamic version glass chip.
  * - Open hairline-divided sections (COMMUNITY & SOURCE, ENGINE & BUILD STACK) with zero boxed cards.
  * - Non-colliding right-side glass chips ("Media3", "Compose", "Multi-device") with min 16dp spacing.
  * - Pure monochrome aesthetics, 98% (0.98x) tactile press scale, and accessibility font scaling.

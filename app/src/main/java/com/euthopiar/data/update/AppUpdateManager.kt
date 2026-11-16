@@ -9,8 +9,10 @@ import androidx.compose.runtime.Immutable
 import androidx.core.content.FileProvider
 import com.euthopiar.core.network.DohDns
 import com.euthopiar.data.preferences.PreferencesRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,54 +21,110 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.security.MessageDigest
 
 object AppUpdateConfig {
-    const val IS_UPDATE_SYSTEM_ENABLED = false
-    const val GITHUB_OWNER = "TheARCreactorGUY"
-    const val GITHUB_REPO = "Euthopiar"
-    const val GITHUB_REPO_FALLBACK = "Euthopiar-"
+    /**
+     * Master toggle for the remote update subsystem.
+     */
+    const val IS_UPDATE_SYSTEM_ENABLED = true
+
+    /**
+     * Official GitHub Repository Information.
+     */
+    const val GITHUB_OWNER = "divyanshupandey0"
+    const val GITHUB_REPO = "movie-hub"
     const val GITHUB_REPO_URL = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
     const val GITHUB_RELEASES_URL = "$GITHUB_REPO_URL/releases"
-    const val GITHUB_LATEST_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
-    const val GITHUB_ALL_RELEASES_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases"
-    const val GITHUB_LATEST_FALLBACK_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO_FALLBACK/releases/latest"
-    const val GITHUB_ALL_FALLBACK_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO_FALLBACK/releases"
+
+    /**
+     * Primary remote update endpoints on the user's GitHub repository.
+     * We support both movie-hub and moviehub URLs seamlessly as primary/fallback.
+     */
+    val GITHUB_VERSION_JSON_URLS = listOf(
+        "https://raw.githubusercontent.com/$GITHUB_OWNER/movie-hub/main/version.json",
+        "https://raw.githubusercontent.com/$GITHUB_OWNER/moviehub/main/version.json"
+    )
+
+    val GITHUB_RELEASES_API_URLS = listOf(
+        "https://api.github.com/repos/$GITHUB_OWNER/movie-hub/releases/latest",
+        "https://api.github.com/repos/$GITHUB_OWNER/moviehub/releases/latest"
+    )
 }
+
+@Immutable
+data class GitHubVersionManifest(
+    val versionCode: Int,
+    val versionName: String,
+    val downloadUrl: String,
+    val releaseNotes: String,
+    val isUpdateAvailableFlag: Boolean = true,
+    val minimumSupportedVersion: Int = 1
+)
 
 @Immutable
 data class ReleaseInfo(
     val tagName: String,
     val versionName: String,
+    val versionCode: Int,
     val releaseTitle: String,
     val changelog: String,
     val publishedAt: String,
     val htmlUrl: String,
     val apkDownloadUrl: String?,
     val apkSizeBytes: Long = 0L,
-    val isPrerelease: Boolean = false
+    val isPrerelease: Boolean = false,
+    val isMandatory: Boolean = false,
+    val minSupportedVersionCode: Int = 1,
+    val apkSha256: String = ""
 )
 
 sealed interface UpdateCheckState {
     data object Idle : UpdateCheckState
     data object Checking : UpdateCheckState
-    data class UpdateAvailable(val release: ReleaseInfo, val currentVersion: String) : UpdateCheckState
+    data class UpdateAvailable(
+        val release: ReleaseInfo,
+        val currentVersion: String,
+        val currentVersionCode: Int,
+        val isMandatory: Boolean
+    ) : UpdateCheckState
     data class UpToDate(val currentVersion: String, val latestRelease: ReleaseInfo? = null) : UpdateCheckState
     data class Error(val message: String) : UpdateCheckState
 }
 
 sealed interface ApkDownloadState {
     data object Idle : ApkDownloadState
-    data class Downloading(val progressFraction: Float, val downloadedBytes: Long, val totalBytes: Long) : ApkDownloadState
-    data class ReadyToInstall(val apkFile: File) : ApkDownloadState
-    data class Error(val message: String) : ApkDownloadState
+    data class Downloading(
+        val progressFraction: Float,
+        val downloadedBytes: Long,
+        val totalBytes: Long
+    ) : ApkDownloadState
+    data class Paused(
+        val progressFraction: Float,
+        val downloadedBytes: Long,
+        val totalBytes: Long
+    ) : ApkDownloadState
+    data class ReadyToInstall(val apkFile: File, val release: ReleaseInfo) : ApkDownloadState
+    data class Error(val message: String, val canRetry: Boolean = true) : ApkDownloadState
+}
+
+/**
+ * Checks if remote version is newer than installed version.
+ */
+fun isRemoteUpdateAvailable(
+    currentVersionCode: Int,
+    remoteVersionCode: Int,
+    currentVersionName: String,
+    remoteVersionName: String
+): Boolean {
+    if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return false
+    if (remoteVersionCode > 0 && currentVersionCode > 0) {
+        return remoteVersionCode > currentVersionCode
+    }
+    return isRemoteVersionNewer(currentVersionName, remoteVersionName)
 }
 
 fun isRemoteVersionNewer(currentVersion: String, remoteTag: String): Boolean {
@@ -115,11 +173,29 @@ class AppUpdateManager private constructor(private val context: Context) {
     private val _autoPopupShownForSession = MutableStateFlow(false)
     val autoPopupShownForSession: StateFlow<Boolean> = _autoPopupShownForSession.asStateFlow()
 
+    private var activeDownloadJob: Job? = null
+    private var lastAttemptedRelease: ReleaseInfo? = null
+
     fun getCurrentVersionName(): String {
         return try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "1.1.0"
         } catch (_: Exception) {
-            "1.0.0"
+            "1.1.0"
+        }
+    }
+
+    fun getCurrentVersionCode(): Int {
+        return try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode
+            }
+        } catch (_: Exception) {
+            11
         }
     }
 
@@ -130,112 +206,109 @@ class AppUpdateManager private constructor(private val context: Context) {
         }
         _updateState.value = UpdateCheckState.Checking
         val currentVersion = getCurrentVersionName()
+        val currentVersionCode = getCurrentVersionCode()
 
         withContext(Dispatchers.IO) {
-            try {
-                val includePrereleases = preferencesRepository.includePrereleases.first()
-                val client = DohDns.sharedBaseClient
+            var lastErrorMessage: String? = null
+            var resolvedRelease: ReleaseInfo? = null
 
-                var releaseJson: JSONObject? = null
+            // 1. First priority: Check version.json from user's GitHub repository
+            val versionJsonUrls = AppUpdateConfig.GITHUB_VERSION_JSON_URLS
+            val client = DohDns.sharedBaseClient
 
-                if (!includePrereleases) {
+            for (url in versionJsonUrls) {
+                try {
                     val request = Request.Builder()
-                        .url(AppUpdateConfig.GITHUB_LATEST_API_URL)
-                        .header("Accept", "application/vnd.github+json")
-                        .header("User-Agent", "MOVIE-HUB-App")
+                        .url(url)
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "MOVIE-HUB-Android/${getCurrentVersionName()}")
                         .build()
 
                     client.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
                             val body = response.body?.string()
                             if (!body.isNullOrBlank()) {
-                                releaseJson = JSONObject(body)
+                                val manifest = parseVersionJson(JSONObject(body))
+                                resolvedRelease = ReleaseInfo(
+                                    tagName = if (manifest.versionName.startsWith("v", ignoreCase = true)) manifest.versionName else "v${manifest.versionName}",
+                                    versionName = manifest.versionName,
+                                    versionCode = manifest.versionCode,
+                                    releaseTitle = "MOVIE HUB v${manifest.versionName}",
+                                    changelog = manifest.releaseNotes,
+                                    publishedAt = "Latest GitHub Release",
+                                    htmlUrl = AppUpdateConfig.GITHUB_RELEASES_URL,
+                                    apkDownloadUrl = manifest.downloadUrl,
+                                    apkSizeBytes = 0L,
+                                    isPrerelease = false,
+                                    isMandatory = currentVersionCode < manifest.minimumSupportedVersion,
+                                    minSupportedVersionCode = manifest.minimumSupportedVersion
+                                )
+                                return@use
                             }
-                        } else if (response.code == 404) {
-                            // Fallback to legacy repo if rename hasn't fully propagated
-                            val fallbackReq = Request.Builder()
-                                .url(AppUpdateConfig.GITHUB_LATEST_FALLBACK_API_URL)
-                                .header("Accept", "application/vnd.github+json")
-                                .header("User-Agent", "MOVIE-HUB-App")
-                                .build()
-                            client.newCall(fallbackReq).execute().use { fbResponse ->
-                                if (fbResponse.isSuccessful) {
-                                    val fbBody = fbResponse.body?.string()
-                                    if (!fbBody.isNullOrBlank()) {
-                                        releaseJson = JSONObject(fbBody)
-                                    }
-                                }
-                            }
+                        } else if (response.code != 404) {
+                            lastErrorMessage = "GitHub returned HTTP ${response.code}"
                         }
                     }
+                } catch (e: Exception) {
+                    lastErrorMessage = e.message
                 }
+                if (resolvedRelease != null) break
+            }
 
-                // If latest release was not found (404, or prereleases requested), query all releases
-                if (releaseJson == null) {
-                    val request = Request.Builder()
-                        .url(AppUpdateConfig.GITHUB_ALL_RELEASES_API_URL)
-                        .header("Accept", "application/vnd.github+json")
-                        .header("User-Agent", "MOVIE-HUB-App")
-                        .build()
+            // 2. Second priority (Fallback): Query GitHub Releases API directly on user's repo
+            if (resolvedRelease == null) {
+                for (apiUrl in AppUpdateConfig.GITHUB_RELEASES_API_URLS) {
+                    try {
+                        val request = Request.Builder()
+                            .url(apiUrl)
+                            .header("Accept", "application/vnd.github+json")
+                            .header("User-Agent", "MOVIE-HUB-Android/${getCurrentVersionName()}")
+                            .build()
 
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string()
-                            if (!body.isNullOrBlank()) {
-                                val array = JSONArray(body)
-                                for (i in 0 until array.length()) {
-                                    val obj = array.getJSONObject(i)
-                                    if (obj.optBoolean("draft", false)) continue
-                                    val isPre = obj.optBoolean("prerelease", false)
-                                    if (includePrereleases || !isPre) {
-                                        releaseJson = obj
-                                        break
-                                    }
+                        client.newCall(request).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string()
+                                if (!body.isNullOrBlank()) {
+                                    resolvedRelease = parseGitHubReleaseApi(JSONObject(body))
+                                    return@use
                                 }
-                            }
-                        } else if (response.code == 404) {
-                            val fallbackReq = Request.Builder()
-                                .url(AppUpdateConfig.GITHUB_ALL_FALLBACK_API_URL)
-                                .header("Accept", "application/vnd.github+json")
-                                .header("User-Agent", "MOVIE-HUB-App")
-                                .build()
-                            client.newCall(fallbackReq).execute().use { fbResponse ->
-                                if (fbResponse.isSuccessful) {
-                                    val fbBody = fbResponse.body?.string()
-                                    if (!fbBody.isNullOrBlank()) {
-                                        val array = JSONArray(fbBody)
-                                        for (i in 0 until array.length()) {
-                                            val obj = array.getJSONObject(i)
-                                            if (obj.optBoolean("draft", false)) continue
-                                            val isPre = obj.optBoolean("prerelease", false)
-                                            if (includePrereleases || !isPre) {
-                                                releaseJson = obj
-                                                break
-                                            }
-                                        }
-                                    }
-                                }
+                            } else {
+                                lastErrorMessage = "GitHub Releases API returned HTTP ${response.code}"
                             }
                         }
+                    } catch (e: Exception) {
+                        lastErrorMessage = e.message
                     }
+                    if (resolvedRelease != null) break
                 }
+            }
 
-                preferencesRepository.setLastUpdateCheckTimestamp(System.currentTimeMillis())
+            preferencesRepository.setLastUpdateCheckTimestamp(System.currentTimeMillis())
 
-                if (releaseJson == null) {
-                    _updateState.value = UpdateCheckState.UpToDate(currentVersion, null)
-                    return@withContext
-                }
+            val release = resolvedRelease
+            if (release != null) {
+                val isNewer = isRemoteUpdateAvailable(
+                    currentVersionCode = currentVersionCode,
+                    remoteVersionCode = release.versionCode,
+                    currentVersionName = currentVersion,
+                    remoteVersionName = release.versionName
+                )
 
-                val release = parseReleaseInfo(releaseJson)
-                if (isRemoteVersionNewer(currentVersion, release.tagName)) {
-                    _updateState.value = UpdateCheckState.UpdateAvailable(release, currentVersion)
+                if (isNewer) {
+                    _updateState.value = UpdateCheckState.UpdateAvailable(
+                        release = release,
+                        currentVersion = currentVersion,
+                        currentVersionCode = currentVersionCode,
+                        isMandatory = release.isMandatory
+                    )
                 } else {
                     _updateState.value = UpdateCheckState.UpToDate(currentVersion, release)
                 }
-            } catch (e: Exception) {
+            } else {
                 if (forceManual) {
-                    _updateState.value = UpdateCheckState.Error(e.message ?: "Failed to check for updates")
+                    _updateState.value = UpdateCheckState.Error(
+                        lastErrorMessage ?: "Unable to connect to GitHub repository. Please check your internet connection."
+                    )
                 } else {
                     _updateState.value = UpdateCheckState.UpToDate(currentVersion, null)
                 }
@@ -243,13 +316,30 @@ class AppUpdateManager private constructor(private val context: Context) {
         }
     }
 
-    private fun parseReleaseInfo(json: JSONObject): ReleaseInfo {
-        val tagName = json.optString("tag_name", "").ifBlank { "v1.0.0" }
+    fun parseVersionJson(json: JSONObject): GitHubVersionManifest {
+        val versionCode = json.optInt("versionCode", 0)
+        val versionName = json.optString("versionName", "").trim()
+        val downloadUrl = json.optString("downloadUrl", "").trim()
+        val releaseNotes = json.optString("releaseNotes", "Bug fixes and performance improvements.")
+        val isUpdateAvailableFlag = json.optBoolean("isUpdateAvailable", true)
+        val minimumSupportedVersion = json.optInt("minimumSupportedVersion", 1)
+
+        return GitHubVersionManifest(
+            versionCode = versionCode,
+            versionName = versionName,
+            downloadUrl = downloadUrl,
+            releaseNotes = releaseNotes,
+            isUpdateAvailableFlag = isUpdateAvailableFlag,
+            minimumSupportedVersion = minimumSupportedVersion
+        )
+    }
+
+    private fun parseGitHubReleaseApi(json: JSONObject): ReleaseInfo {
+        val tagName = json.optString("tag_name", "v1.0.0")
         val versionName = tagName.removePrefix("v").removePrefix("V")
-        val releaseTitle = json.optString("name", "").ifBlank { tagName }
-        val changelog = json.optString("body", "").ifBlank { "Bug fixes and performance improvements." }
-        val rawPublishedAt = json.optString("published_at", "")
-        val publishedAt = formatPublishedDate(rawPublishedAt)
+        val releaseTitle = json.optString("name", "MOVIE HUB $tagName")
+        val changelog = json.optString("body", "Bug fixes and performance improvements.")
+        val publishedAt = json.optString("published_at", "Recently")
         val htmlUrl = json.optString("html_url", AppUpdateConfig.GITHUB_RELEASES_URL)
         val isPrerelease = json.optBoolean("prerelease", false)
 
@@ -269,30 +359,36 @@ class AppUpdateManager private constructor(private val context: Context) {
             }
         }
 
+        // Infer a versionCode if not specified in tag
+        val inferredVersionCode = try {
+            val parts = versionName.split(".")
+            val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
+            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            val patch = parts.getOrNull(2)?.substringBefore("-")?.toIntOrNull() ?: 0
+            (major * 100) + (minor * 10) + patch
+        } catch (_: Exception) {
+            0
+        }
+
         return ReleaseInfo(
             tagName = tagName,
             versionName = versionName,
+            versionCode = inferredVersionCode,
             releaseTitle = releaseTitle,
             changelog = changelog,
-            publishedAt = publishedAt,
+            publishedAt = publishedAt.substringBefore("T"),
             htmlUrl = htmlUrl,
             apkDownloadUrl = apkDownloadUrl,
             apkSizeBytes = apkSizeBytes,
-            isPrerelease = isPrerelease
+            isPrerelease = isPrerelease,
+            isMandatory = false,
+            minSupportedVersionCode = 1
         )
     }
 
-    private fun formatPublishedDate(isoStr: String): String {
-        if (isoStr.isBlank()) return "Recently"
-        return try {
-            val instant = Instant.parse(isoStr)
-            val zdt = instant.atZone(ZoneId.systemDefault())
-            DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US).format(zdt)
-        } catch (_: Exception) {
-            isoStr.substringBefore("T")
-        }
-    }
-
+    /**
+     * Downloads target APK with live progress, pause/resume, and validation.
+     */
     fun downloadAndInstallUpdate(release: ReleaseInfo) {
         if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return
         val downloadUrl = release.apkDownloadUrl
@@ -301,42 +397,74 @@ class AppUpdateManager private constructor(private val context: Context) {
             return
         }
 
-        scope.launch(Dispatchers.IO) {
+        if (activeDownloadJob?.isActive == true) {
+            return
+        }
+
+        lastAttemptedRelease = release
+
+        activeDownloadJob = scope.launch(Dispatchers.IO) {
             try {
-                _downloadState.value = ApkDownloadState.Downloading(0f, 0L, release.apkSizeBytes)
                 val updatesDir = File(context.cacheDir, "updates")
                 if (!updatesDir.exists()) {
                     updatesDir.mkdirs()
                 }
 
-                val apkFile = File(updatesDir, "MOVIE-HUB-${release.versionName}.apk")
-                if (apkFile.exists()) {
-                    apkFile.delete()
+                val sanitizedVersion = release.versionName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val apkFile = File(updatesDir, "MOVIE-HUB-$sanitizedVersion.apk")
+                val tempFile = File(updatesDir, "MOVIE-HUB-$sanitizedVersion.apk.part")
+
+                var existingBytes = 0L
+                if (tempFile.exists()) {
+                    existingBytes = tempFile.length()
                 }
 
-                val client = DohDns.sharedBaseClient
-                val request = Request.Builder()
-                    .url(downloadUrl)
-                    .header("User-Agent", "Euthopiar-App")
-                    .build()
+                _downloadState.value = ApkDownloadState.Downloading(
+                    progressFraction = if (release.apkSizeBytes > 0) (existingBytes.toFloat() / release.apkSizeBytes).coerceIn(0f, 1f) else 0f,
+                    downloadedBytes = existingBytes,
+                    totalBytes = release.apkSizeBytes
+                )
 
-                client.newCall(request).execute().use { response ->
+                val client = DohDns.sharedBaseClient
+                val requestBuilder = Request.Builder()
+                    .url(downloadUrl)
+                    .header("User-Agent", "MOVIE-HUB-Android/${getCurrentVersionName()}")
+
+                if (existingBytes > 0) {
+                    requestBuilder.header("Range", "bytes=$existingBytes-")
+                }
+
+                client.newCall(requestBuilder.build()).execute().use { response ->
+                    val isResume = response.code == 206
                     if (!response.isSuccessful) {
-                        _downloadState.value = ApkDownloadState.Error("HTTP download error: ${response.code}")
+                        _downloadState.value = ApkDownloadState.Error("Download failed with HTTP ${response.code}")
                         return@launch
                     }
 
                     val body = response.body ?: run {
-                        _downloadState.value = ApkDownloadState.Error("Empty response body from GitHub")
+                        _downloadState.value = ApkDownloadState.Error("Empty download stream from server")
                         return@launch
                     }
 
-                    val totalBytes = if (body.contentLength() > 0) body.contentLength() else release.apkSizeBytes
-                    var downloadedBytes = 0L
+                    val serverContentLength = body.contentLength()
+                    val totalBytes = when {
+                        isResume && serverContentLength > 0 -> existingBytes + serverContentLength
+                        serverContentLength > 0 -> serverContentLength
+                        release.apkSizeBytes > 0 -> release.apkSizeBytes
+                        else -> 0L
+                    }
+
+                    if (!isResume && existingBytes > 0) {
+                        tempFile.delete()
+                        existingBytes = 0L
+                    }
+
+                    val append = isResume && existingBytes > 0
+                    var downloadedBytes = existingBytes
 
                     body.byteStream().use { input ->
-                        FileOutputStream(apkFile).use { output ->
-                            val buffer = ByteArray(8 * 1024)
+                        FileOutputStream(tempFile, append).use { output ->
+                            val buffer = ByteArray(32 * 1024)
                             var bytesRead: Int
                             var lastProgressUpdate = 0L
 
@@ -345,7 +473,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                                 downloadedBytes += bytesRead
 
                                 val now = System.currentTimeMillis()
-                                if (now - lastProgressUpdate > 100 || downloadedBytes == totalBytes) {
+                                if (now - lastProgressUpdate > 100 || (totalBytes > 0 && downloadedBytes == totalBytes)) {
                                     lastProgressUpdate = now
                                     val fraction = if (totalBytes > 0) {
                                         (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
@@ -360,16 +488,85 @@ class AppUpdateManager private constructor(private val context: Context) {
                     }
                 }
 
-                _downloadState.value = ApkDownloadState.ReadyToInstall(apkFile)
+                // Verify file integrity
+                if (release.apkSha256.isNotBlank()) {
+                    val computedSha256 = calculateSha256(tempFile)
+                    if (!computedSha256.equals(release.apkSha256.trim(), ignoreCase = true)) {
+                        tempFile.delete()
+                        _downloadState.value = ApkDownloadState.Error("APK checksum verification failed. Please retry.")
+                        return@launch
+                    }
+                }
+
+                // Move temp part to final APK
+                if (apkFile.exists()) {
+                    apkFile.delete()
+                }
+                if (!tempFile.renameTo(apkFile)) {
+                    tempFile.copyTo(apkFile, overwrite = true)
+                    tempFile.delete()
+                }
+
+                // Verify APK package archive validity via Android PackageManager
+                val packageArchiveInfo = context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+                if (packageArchiveInfo == null) {
+                    apkFile.delete()
+                    _downloadState.value = ApkDownloadState.Error("Downloaded file is not a valid Android APK")
+                    return@launch
+                }
+
+                _downloadState.value = ApkDownloadState.ReadyToInstall(apkFile, release)
                 withContext(Dispatchers.Main) {
                     triggerInstallApk(apkFile, release.htmlUrl)
                 }
+            } catch (e: CancellationException) {
+                _downloadState.value = ApkDownloadState.Idle
             } catch (e: Exception) {
-                _downloadState.value = ApkDownloadState.Error(e.message ?: "Download failed")
+                _downloadState.value = ApkDownloadState.Error(
+                    e.message ?: "Download encountered an error. Tap retry to resume."
+                )
+            } finally {
+                activeDownloadJob = null
             }
         }
     }
 
+    fun retryDownload() {
+        lastAttemptedRelease?.let { release ->
+            downloadAndInstallUpdate(release)
+        }
+    }
+
+    fun pauseOrCancelDownload() {
+        activeDownloadJob?.cancel()
+        activeDownloadJob = null
+        val current = _downloadState.value
+        if (current is ApkDownloadState.Downloading) {
+            _downloadState.value = ApkDownloadState.Paused(
+                progressFraction = current.progressFraction,
+                downloadedBytes = current.downloadedBytes,
+                totalBytes = current.totalBytes
+            )
+        } else {
+            _downloadState.value = ApkDownloadState.Idle
+        }
+    }
+
+    private fun calculateSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buffer = ByteArray(16 * 1024)
+            var bytesRead: Int
+            while (stream.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Safely triggers the official Android PackageInstaller flow with unknown-app permissions handling.
+     */
     fun triggerInstallApk(apkFile: File, fallbackUrl: String) {
         if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return
         try {
