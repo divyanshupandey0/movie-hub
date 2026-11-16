@@ -2660,15 +2660,9 @@ class PlayerViewModel(
                         }
                     )
                 } else {
-                    DefaultExtractorsFactory()
-                        .setConstantBitrateSeekingEnabled(true)
-                        .setConstantBitrateSeekingAlwaysEnabled(true)
-                        .setTsExtractorFlags(
-                            DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS or
-                            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
-                            DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
-                        )
-                        .setTsExtractorTimestampSearchBytes(1500 * TsExtractor.TS_PACKET_SIZE)
+                    com.euthopiar.ui.player.sequential.UniversalSafeExtractorsFactory(
+                        durationMsProvider = { _uiState.value.durationMs }
+                    )
                 }
                 ProgressiveMediaSource.Factory(dataSourceFactory, progressiveExtractorsFactory)
                     .createMediaSource(mediaItem)
@@ -3399,57 +3393,22 @@ class PlayerViewModel(
                             !currentOriginalLanguage.equals("hi", ignoreCase = true) &&
                             !currentOriginalLanguage.equals("hin", ignoreCase = true)
 
-                    val labelBuilder = StringBuilder()
-                    if (isHindiTrack && isNonHindiOriginal) {
-                        labelBuilder.append("Hindi Dubbed")
-                    } else if (!format.label.isNullOrBlank()) {
-                        labelBuilder.append(format.label)
-                    } else if (lang != null) {
-                        val displayLang = try {
-                            java.util.Locale(lang).displayLanguage.replaceFirstChar { it.uppercase() }
-                        } catch (_: Exception) {
-                            lang.uppercase()
-                        }
-                        labelBuilder.append(displayLang)
-                    } else {
-                        labelBuilder.append("Audio Track ${detectedAudio.size}")
-                    }
-
-                    val codecName = when {
-                        format.sampleMimeType?.contains("eac3-joc", ignoreCase = true) == true -> "DDP Atmos"
-                        format.sampleMimeType?.contains("eac3", ignoreCase = true) == true -> "DDP 5.1"
-                        format.sampleMimeType?.contains("ac3", ignoreCase = true) == true -> "AC3"
-                        format.sampleMimeType?.contains("true-hd", ignoreCase = true) == true -> "TrueHD Atmos"
-                        format.sampleMimeType?.contains("dts", ignoreCase = true) == true -> "DTS"
-                        format.sampleMimeType?.contains("mp4a", ignoreCase = true) == true || format.sampleMimeType?.contains("aac", ignoreCase = true) == true -> "AAC"
-                        format.sampleMimeType?.contains("opus", ignoreCase = true) == true -> "Opus"
-                        else -> null
-                    }
-
-                    if (format.channelCount > 0) {
-                        val channels = when (format.channelCount) {
-                            1 -> "Mono"
-                            2 -> "Stereo"
-                            6 -> "5.1 Surround"
-                            8 -> "7.1 Surround"
-                            else -> "${format.channelCount} Ch"
-                        }
-                        if (codecName != null) {
-                            labelBuilder.append(" ($channels • $codecName)")
-                        } else {
-                            labelBuilder.append(" ($channels)")
-                        }
-                    } else if (codecName != null) {
-                        labelBuilder.append(" ($codecName)")
-                    }
+                    val cleanDisplayName = AudioLanguageFormatter.formatTrackDisplayName(
+                        isoCode = lang,
+                        rawLabel = format.label,
+                        channelCount = format.channelCount,
+                        sampleMimeType = format.sampleMimeType,
+                        trackIndex = detectedAudio.size - 1,
+                        originalLanguage = currentOriginalLanguage
+                    )
 
                     val optId = "audio_${groupIndex}_$i"
                     val audioOpt = AudioTrackOption(
                         id = optId,
-                        label = labelBuilder.toString(),
+                        label = cleanDisplayName,
                         language = lang,
                         isoCode = lang ?: "und",
-                        displayName = labelBuilder.toString(),
+                        displayName = cleanDisplayName,
                         isSelected = isSelected,
                         trackIndex = i,
                         groupIndex = groupIndex,
@@ -3496,29 +3455,47 @@ class PlayerViewModel(
         if (detectedAudio.size > 1) {
             val prefLang = userPreferredAudioLanguage.ifBlank { "hi" }
             val secLang = userSecondaryAudioLanguage.ifBlank { "en" }
-            val preferredTrack = detectedAudio.firstOrNull { opt ->
+
+            // 1. Detect if any Hindi track is available
+            val hindiTrack = detectedAudio.firstOrNull { opt ->
                 !opt.isAuto && (
-                    opt.language?.equals(prefLang, ignoreCase = true) == true ||
-                    opt.isoCode.equals(prefLang, ignoreCase = true) ||
+                    opt.language?.equals("hi", ignoreCase = true) == true ||
+                    opt.language?.equals("hin", ignoreCase = true) == true ||
+                    opt.isoCode.equals("hi", ignoreCase = true) ||
+                    opt.isoCode.equals("hin", ignoreCase = true) ||
                     opt.displayName.contains("Hindi", ignoreCase = true) ||
                     opt.label.contains("Hindi", ignoreCase = true)
                 )
-            } ?: detectedAudio.firstOrNull { opt ->
+            }
+
+            // 2. If user explicitly configured a non-Hindi preference, check that first
+            val userExplicitTrack = if (!prefLang.equals("hi", ignoreCase = true) && !prefLang.equals("hin", ignoreCase = true)) {
+                detectedAudio.firstOrNull { opt ->
+                    !opt.isAuto && (
+                        opt.language?.equals(prefLang, ignoreCase = true) == true ||
+                        opt.isoCode.equals(prefLang, ignoreCase = true) ||
+                        opt.displayName.contains(prefLang, ignoreCase = true)
+                    )
+                }
+            } else null
+
+            // 3. Fallback: Hindi -> Secondary Language -> Original / Default Track (first playable non-auto)
+            val preferredTrack = userExplicitTrack ?: hindiTrack ?: detectedAudio.firstOrNull { opt ->
                 !opt.isAuto && (
                     opt.language?.equals(secLang, ignoreCase = true) == true ||
                     opt.isoCode.equals(secLang, ignoreCase = true) ||
                     opt.displayName.contains("English", ignoreCase = true) ||
                     opt.label.contains("English", ignoreCase = true)
                 )
-            }
+            } ?: detectedAudio.firstOrNull { !it.isAuto }
 
             val activeSelected = preferredTrack ?: _uiState.value.selectedAudioTrack
             val effectiveSelected = if (activeSelected.id in detectedAudio.map { a -> a.id }) {
                 activeSelected
             } else {
-                detectedAudio.first()
+                detectedAudio.firstOrNull { !it.isAuto } ?: detectedAudio.first()
             }
-            if (preferredTrack != null && !effectiveSelected.isAuto) {
+            if (effectiveSelected != null && !effectiveSelected.isAuto) {
                 selectAudioTrack(effectiveSelected)
             }
             _uiState.update {
@@ -4637,12 +4614,16 @@ class PlayerViewModel(
             showToast("Audio: Auto (Default)")
             return
         }
+        val currentPlaybackPosition = player.currentPosition.coerceAtLeast(0L)
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             .setPreferredAudioLanguage(isoCode)
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
             .build()
+        if (currentPlaybackPosition > 1000L && player.currentPosition < 500L) {
+            player.seekTo(currentPlaybackPosition)
+        }
         _uiState.update { state ->
             val updated = state.availableAudioTracks.map {
                 it.copy(isSelected = it.isoCode.equals(isoCode, ignoreCase = true) || it.language.equals(isoCode, ignoreCase = true))
@@ -4677,6 +4658,7 @@ class PlayerViewModel(
         }
         updateMediaFormatInfo()
         val player = exoPlayer ?: return
+        val currentPlaybackPosition = player.currentPosition.coerceAtLeast(0L)
 
         if (!option.isAuto && option.groupIndex >= 0 && option.trackIndex >= 0) {
             val tracks = player.currentTracks
@@ -4696,7 +4678,10 @@ class PlayerViewModel(
                             option.language?.let { setPreferredAudioLanguage(it) }
                         }
                         .build()
-                    showToast("Audio: ${option.label}")
+                    if (currentPlaybackPosition > 1000L && player.currentPosition < 500L) {
+                        player.seekTo(currentPlaybackPosition)
+                    }
+                    showToast("Audio: ${option.displayName}")
                     return
                 }
             }
@@ -4945,11 +4930,15 @@ class PlayerViewModel(
 
         seekDebounceJob?.cancel()
         seekDebounceJob = viewModelScope.launch {
-            delay(300L)
+            delay(150L)
             val seekTarget = pendingSeekTargetMs ?: newPos
             player.seekTo(seekTarget)
-            delay(200L)
+            delay(250L)
             if (pendingSeekTargetMs == seekTarget) {
+                // If player was seeked forward and erroneously snapped back to 0, ensure target is maintained
+                if (seekTarget > 3000L && player.currentPosition < 1000L) {
+                    player.seekTo(seekTarget)
+                }
                 pendingSeekTargetMs = null
             }
         }

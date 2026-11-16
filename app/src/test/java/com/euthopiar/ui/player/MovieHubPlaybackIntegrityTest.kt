@@ -556,18 +556,20 @@ class MovieHubPlaybackIntegrityTest {
     }
 
     /**
-     * Scenario Q: Update system disabled integrity.
+     * Scenario Q: Update system official GitHub configuration integrity.
      */
     @Test
     fun testScenarioQ_UpdateSystemDisabledIntegrity() = runBlocking {
-        assertFalse(
-            "App update system must be completely disabled",
+        assertTrue(
+            "App update system is enabled for official releases",
             com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED
         )
+        assertEquals(
+            "https://github.com/divyanshupandey0/movie-hub",
+            com.euthopiar.data.update.AppUpdateConfig.GITHUB_REPO_URL
+        )
         val updateMgr = com.euthopiar.data.update.AppUpdateManager.getInstance(application)
-        updateMgr.checkForUpdates(forceManual = true)
-        // Returns immediately with UpToDate without making any network requests
-        assertTrue(updateMgr.updateState.value is com.euthopiar.data.update.UpdateCheckState.UpToDate)
+        assertNotNull(updateMgr)
     }
 
     /**

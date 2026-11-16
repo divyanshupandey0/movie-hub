@@ -98,8 +98,16 @@ fun PlaybackSettingsPage(
     val smartFailover by viewModel.smartFailover.collectAsState()
     val audioPassthrough by viewModel.audioPassthrough.collectAsState()
     val preferredAudioLanguage by viewModel.preferredAudioLanguage.collectAsState()
+    val appLanguage by viewModel.appLanguage.collectAsState()
 
     var showResetDialog by remember { mutableStateOf(false) }
+
+    val appLanguageOptions = remember {
+        listOf(
+            PopoverOption("hi", "Hindi (हिंदी)", "डिफ़ॉल्ट ऐप भाषा / Default app language"),
+            PopoverOption("en", "English", "Standard English interface")
+        )
+    }
 
     val audioLanguageOptions = remember {
         listOf(
@@ -279,6 +287,21 @@ fun PlaybackSettingsPage(
                     options = audioLanguageOptions,
                     selected = preferredAudioLanguage,
                     onSelected = { viewModel.setPreferredAudioLanguage(it) },
+                    hazeState = hazeState,
+                    popoverWidth = 240.dp
+                )
+            }
+        )
+
+        // 7. App Display Language Row
+        OpenSettingsRow(
+            title = "App display language / ऐप भाषा",
+            subtitle = "Choose interface language for menus, buttons and settings",
+            trailingContent = {
+                FrostedGlassDropdown(
+                    options = appLanguageOptions,
+                    selected = appLanguage,
+                    onSelected = { viewModel.setAppLanguage(it) },
                     hazeState = hazeState,
                     popoverWidth = 240.dp
                 )

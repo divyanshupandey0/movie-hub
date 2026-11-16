@@ -191,17 +191,10 @@ fun TopHeaderBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // App Wordmark: 15 sp, medium, wide letter spacing (0.2 em), white
-                // Coordinated with AppIgnitionSequence to eliminate dual-text ghosting during landing
-                Text(
-                    text = "MOVIE HUB",
-                    style = AppTypography.titleMedium.copy(
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 15.sp,
-                        letterSpacing = 0.2.em
-                    ),
-                    color = Color.White,
+                // App Logo & Wordmark
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .onGloballyPositioned { coords ->
                             val pos = coords.positionInRoot()
@@ -210,7 +203,24 @@ fun TopHeaderBar(
                         .graphicsLayer {
                             alpha = wordmarkAlpha
                         }
-                )
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.euthopiar.R.drawable.ic_moviehub_logo),
+                        contentDescription = "MOVIE HUB Logo",
+                        modifier = Modifier.size(20.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                    Text(
+                        text = "MOVIE HUB",
+                        style = AppTypography.titleMedium.copy(
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp,
+                            letterSpacing = 0.2.em
+                        ),
+                        color = Color.White
+                    )
+                }
 
                 // Trailing Actions: Update notification badge (if available) + Profile avatar
                 Row(

@@ -96,8 +96,44 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = PreferencesRepository.getInstance(newBase)
+        val lang = kotlinx.coroutines.runBlocking {
+            try {
+                prefs.appLanguage.firstOrNull() ?: "hi"
+            } catch (_: Exception) {
+                "hi"
+            }
+        }
+        val locale = java.util.Locale(lang)
+        java.util.Locale.setDefault(locale)
+        val config = android.content.res.Configuration(newBase.resources.configuration)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            config.setLocales(android.os.LocaleList(locale))
+        } else {
+            @Suppress("DEPRECATION")
+            config.locale = locale
+        }
+        val context = newBase.createConfigurationContext(config)
+        super.attachBaseContext(context)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val prefsRepo = PreferencesRepository.getInstance(applicationContext)
+        lifecycleScope.launch {
+            prefsRepo.appLanguage.collect { lang ->
+                val currentLocale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    resources.configuration.locales.get(0)?.language
+                } else {
+                    @Suppress("DEPRECATION")
+                    resources.configuration.locale?.language
+                }
+                if (currentLocale != null && currentLocale != lang) {
+                    recreate()
+                }
+            }
+        }
         handleDeepLink(intent)
         enableEdgeToEdge()
 

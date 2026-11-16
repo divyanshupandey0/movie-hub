@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MOVIE HUB</string>
+    <string name="download_channel_name">डाउनलोड</string>
+    <string name="download_channel_description">मीडिया डाउनलोड की प्रगति और स्थिति</string>
+
+    <!-- त्रुटि संदेश -->
+    <string name="error_offline_title">आप ऑफ़लाइन हैं</string>
+    <string name="error_offline_hint">अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।</string>
+    <string name="error_source_failed_title">यह स्रोत काम नहीं कर रहा है</string>
+    <string name="error_source_failed_hint">कृपया कोई दूसरा स्रोत आज़माएं।</string>
+    <string name="error_no_sources_title">अभी कोई स्रोत उपलब्ध नहीं है</string>
+    <string name="error_no_sources_hint">देखना शुरू करने के लिए कोई स्रोत जोड़ें।</string>
+    <string name="error_generic_title">कुछ गलत हो गया</string>
+    <string name="error_generic_hint">कुछ समय बाद पुनः प्रयास करें।</string>
+    <string name="error_no_results_title">कोई परिणाम नहीं मिला</string>
+    <string name="error_no_results_query_title">\"%1$s\" के लिए कोई परिणाम नहीं मिला</string>
+    <string name="error_no_results_hint">स्पेलिंग जांचें या कोई अन्य स्रोत आज़माएं।</string>
+
+    <!-- क्रियाएं (Actions) -->
+    <string name="action_retry">पुनः प्रयास करें</string>
+    <string name="action_try_another_source">दूसरा स्रोत आज़माएं</string>
+    <string name="action_go_back">वापस जाएं</string>
+    <string name="action_add_source">स्रोत जोड़ें</string>
+    <string name="action_connect">कनेक्ट करें</string>
+    <string name="action_disconnect">डिस्कनेक्ट करें</string>
+    <string name="action_save">सहेजें</string>
+    <string name="action_cancel">रद्द करें</string>
+    <string name="action_done">पूर्ण</string>
+    <string name="action_clear">साफ़ करें</string>
+
+    <!-- सेटिंग्स अनुभाग -->
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="settings_section_account">खाता और प्रोफाइल</string>
+    <string name="settings_section_sources">कंटेंट स्रोत</string>
+    <string name="settings_section_accounts">कनेक्टेड खाते</string>
+    <string name="settings_section_playback">प्लेबैक</string>
+    <string name="settings_section_subtitles">उपशीर्षक और ऑडियो</string>
+    <string name="settings_section_downloads">डाउनलोड और स्टोरेज</string>
+    <string name="settings_section_privacy">गोपनीयता</string>
+    <string name="settings_section_network_privacy">नेटवर्क और गोपनीयता</string>
+    <string name="settings_section_advanced">उन्नत प्राथमिकताएं</string>
+    <string name="settings_section_about">के बारे में</string>
+
+    <!-- सेटिंग्स आइटम -->
+    <string name="settings_sources_title">स्रोत</string>
+    <string name="settings_sources_subtitle">स्रोत जोड़ें, अपडेट करें या हटाएं</string>
+    <string name="settings_sources_active_count">%1$d सक्रिय</string>
+    <string name="settings_active_source_title">सक्रिय स्रोत</string>
+    <string name="settings_active_source_subtitle">कैटलॉग और खोज के लिए डिफ़ॉल्ट स्रोत</string>
+    <string name="settings_trakt_title">वॉच हिस्ट्री सिंक करें</string>
+    <string name="settings_trakt_subtitle_connected">@%1$s के रूप में कनेक्टेड</string>
+    <string name="settings_trakt_subtitle_disconnected">देखने की प्रगति और इतिहास सिंक करें</string>
+    <string name="settings_trakt_connected">कनेक्टेड</string>
+    <string name="settings_trakt_not_connected">कनेक्टेड नहीं है</string>
+    <string name="settings_trakt_auto_scrobble_title">स्वचालित रूप से सिंक करें</string>
+    <string name="settings_trakt_auto_scrobble_subtitle">देखते समय Trakt को अपडेट रखें</string>
+    <string name="settings_simkl_title">Simkl खाता</string>
+    <string name="settings_simkl_subtitle_connected">Simkl से कनेक्टेड</string>
+    <string name="settings_simkl_subtitle_disconnected">एनिमे, टीवी शो और फिल्में Simkl पर सिंक करें</string>
+    <string name="settings_simkl_auto_scrobble_title">स्वचालित रूप से सिंक करें</string>
+    <string name="settings_simkl_auto_scrobble_subtitle">देखते समय Simkl को अपडेट रखें</string>
+    <string name="settings_whats_new_title">नया क्या है</string>
+    <string name="settings_whats_new_subtitle">नवीनतम सुविधाएं और सुधार देखें</string>
+    <string name="settings_debrid_title">प्रीमियम लिंक सेवाएं</string>
+    <string name="settings_debrid_subtitle">Real-Debrid, AllDebrid या TorBox के साथ हाई-स्पीड स्ट्रीमिंग</string>
+    <string name="settings_default_quality_title">स्ट्रीमिंग गुणवत्ता</string>
+    <string name="settings_default_quality_subtitle">पसंदीदा वीडियो रिज़ॉल्यूशन</string>
+    <string name="settings_autoplay_next_title">अगला एपिसोड स्वतः चलाएं</string>
+    <string name="settings_autoplay_next_subtitle">क्रेडिट समाप्त होने पर अगला एपिसोड शुरू करें</string>
+    <string name="settings_seek_interval_title">डबल-टैप सीक अंतराल</string>
+    <string name="settings_seek_interval_subtitle">आगे या पीछे जाने के सेकंड</string>
+    <string name="settings_subtitle_size_title">उपशीर्षक का आकार</string>
+    <string name="settings_subtitle_color_title">उपशीर्षक का रंग</string>
+    <string name="settings_subtitle_preview_text">पूर्वावलोकन उपशीर्षक टेक्स्ट</string>
+    <string name="settings_wifi_only_title">केवल वाई-फ़ाई पर डाउनलोड करें</string>
+    <string name="settings_wifi_only_subtitle">मोबाइल डेटा सुरक्षित रखें</string>
+    <string name="settings_storage_cache_title">स्टोरेज और कैशे</string>
+    <string name="settings_storage_cache_subtitle">कैश्ड आर्टवर्क और डेटा: %1$s</string>
+    <string name="settings_clear_cache_action">कैशे साफ़ करें</string>
+    <string name="settings_doh_title">सुरक्षित DNS</string>
+    <string name="settings_doh_subtitle">एन्क्रिप्टेड डोमेन रिज़ॉल्यूशन</string>
+    <string name="settings_extra_content_title">अतिरिक्त स्रोत</string>
+    <string name="settings_extra_content_subtitle">वैकल्पिक पूरक कैटलॉग स्रोत दिखाएं</string>
+    <string name="settings_card_scale_title">पोस्टर का आकार</string>
+    <string name="settings_card_scale_subtitle">कैटलॉग में मीडिया पोस्टर का आकार बदलें</string>
+
+    <!-- कास्ट और बाहरी प्लेबैक -->
+    <string name="cast_title">कास्ट और बाहरी प्लेबैक</string>
+    <string name="cast_subtitle">स्मार्ट टीवी या बाहरी वीडियो प्लेयर पर स्ट्रीम करें</string>
+    <string name="cast_external_player_header">बाहरी प्लेयर में खोलें</string>
+    <string name="cast_network_header">टीवी पर कास्ट करें</string>
+    <string name="cast_searching_devices">उपकरण खोजे जा रहे हैं…</string>
+    <string name="cast_no_devices_found">इस वाई-फ़ाई नेटवर्क पर कोई उपकरण नहीं मिला। पुनः स्कैन करें।</string>
+    <string name="cast_copy_stream_link">वीडियो लिंक कॉपी करें</string>
+    <string name="cast_stream_link_copied">वीडियो लिंक क्लिपबोर्ड पर कॉपी किया गया</string>
+
+    <!-- प्लेयर नियंत्रण -->
+    <string name="player_speed">गति</string>
+    <string name="player_audio_subtitles">ऑडियो और उपशीर्षक</string>
+    <string name="player_settings">सेटिंग्स</string>
+    <string name="player_next_episode">अगला एपिसोड</string>
+    <string name="player_connecting">स्ट्रीम से कनेक्ट हो रहा है…</string>
+    <string name="player_finding_source">स्रोत खोजा जा रहा है…</string>
+    <string name="player_starting">शुरू हो रहा है…</string>
+    <string name="player_taking_longer">सामान्य से अधिक समय लग रहा है</string>
+    <string name="player_skip_recap">रीकैप छोड़ें</string>
+    <string name="player_skip_outro">आउट्रो छोड़ें</string>
+    <string name="player_episodes">एपिसोड</string>
+    <string name="player_sources">स्रोत</string>
+    <string name="player_quality">गुणवत्ता</string>
+    <string name="player_skip_intro">इंट्रो छोड़ें</string>
+
+    <!-- मीडिया विवरण -->
+    <string name="details_play">चलाएं</string>
+    <string name="details_resume">जारी रखें</string>
+    <string name="details_trailer">ट्रेलर</string>
+    <string name="details_add_to_watchlist">वॉचलिस्ट</string>
+    <string name="details_in_watchlist">वॉचलिस्ट में है</string>
+    <string name="details_episodes">एपिसोड</string>
+    <string name="details_cast">कलाकार और क्रू</string>
+    <string name="details_similar">मिलते-जुलते शीर्षक</string>
+    <string name="details_overview">विवरण</string>
+
+    <!-- होम स्क्रीन -->
+    <string name="home_continue_watching">देखना जारी रखें</string>
+    <string name="home_trending">ट्रेंडिंग</string>
+    <string name="home_popular_movies">लोकप्रिय फिल्में</string>
+    <string name="home_popular_series">लोकप्रिय सीरीज</string>
+    <string name="home_top_10">शीर्ष 10</string>
+
+    <!-- नेविगेशन बार शैली -->
+    <string name="settings_navbar_style_title">नेविगेशन बार शैली</string>
+    <string name="settings_navbar_style_subtitle">डॉक्ड एज-टू-एज बार या फ्लोटिंग पिल चुनें</string>
+    <string name="settings_navbar_style_docked">एज-टू-एज बार</string>
+    <string name="settings_navbar_style_floating">फ्लोटिंग ग्लास पिल</string>
+
+    <!-- एक्सेसिबिलिटी -->
+    <string name="settings_section_accessibility">पहुंच (Accessibility)</string>
+    <string name="settings_reduce_motion_title">मोशन कम करें</string>
+    <string name="settings_reduce_motion_subtitle">ऐप में एनिमेशन और ट्रांज़िशन कम करें</string>
+</resources>

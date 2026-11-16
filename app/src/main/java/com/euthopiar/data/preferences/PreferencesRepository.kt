@@ -143,6 +143,7 @@ class PreferencesRepository private constructor(private val context: Context) {
         val AMOLED_MODE = booleanPreferencesKey("amoled_mode")
         val SMART_FAILOVER_ENABLED = booleanPreferencesKey("smart_failover_enabled")
         val AUDIO_PASSTHROUGH_ENABLED = booleanPreferencesKey("audio_passthrough_enabled")
+        val APP_LANGUAGE = stringPreferencesKey("app_language")
         val PREFERRED_AUDIO_LANGUAGE = stringPreferencesKey("preferred_audio_language")
         val SECONDARY_AUDIO_LANGUAGE = stringPreferencesKey("secondary_audio_language")
         val AUTO_SOURCE_SELECTION = booleanPreferencesKey("auto_source_selection")
@@ -994,6 +995,21 @@ class PreferencesRepository private constructor(private val context: Context) {
         }
     }
 
+    val appLanguage: Flow<String> = context.preferencesDataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.APP_LANGUAGE] ?: "hi"
+        }
+        .distinctUntilChanged()
+
+    suspend fun setAppLanguage(lang: String) {
+        context.preferencesDataStore.edit { preferences ->
+            preferences[PreferencesKeys.APP_LANGUAGE] = lang
+        }
+    }
+
     val preferredAudioLanguage: Flow<String> = context.preferencesDataStore.data
         .catch { exception ->
             if (exception is IOException) emit(emptyPreferences()) else throw exception
@@ -1601,6 +1617,9 @@ class PreferencesRepository private constructor(private val context: Context) {
                 }
                 if (!preferences.contains(PreferencesKeys.ACTIVE_PROVIDER)) {
                     preferences[PreferencesKeys.ACTIVE_PROVIDER] = "Torrentio"
+                }
+                if (!preferences.contains(PreferencesKeys.APP_LANGUAGE)) {
+                    preferences[PreferencesKeys.APP_LANGUAGE] = "hi"
                 }
                 if (!preferences.contains(PreferencesKeys.PREFERRED_AUDIO_LANGUAGE)) {
                     preferences[PreferencesKeys.PREFERRED_AUDIO_LANGUAGE] = "hi"

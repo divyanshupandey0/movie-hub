@@ -7,12 +7,16 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -249,16 +253,27 @@ fun AppIgnitionSequence(
                     }
                 }
         ) {
-            Text(
-                text = "MOVIE HUB",
-                style = AppTypography.titleMedium.copy(
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
-                    letterSpacing = 0.20.em,
-                    color = Color.White
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.euthopiar.R.drawable.ic_moviehub_logo),
+                    contentDescription = "MOVIE HUB Logo",
+                    modifier = Modifier.size(20.dp),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
                 )
-            )
+                Text(
+                    text = "MOVIE HUB",
+                    style = AppTypography.titleMedium.copy(
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 15.sp,
+                        letterSpacing = 0.20.em,
+                        color = Color.White
+                    )
+                )
+            }
         }
     }
 }

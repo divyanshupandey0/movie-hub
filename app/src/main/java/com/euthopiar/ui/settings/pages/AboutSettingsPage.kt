@@ -121,7 +121,7 @@ fun AboutSettingsPage(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // 52x52dp Glass Emblem Tile
+                // 52x52dp Glass Emblem Tile with Official MOVIE HUB Logo
                 Box(
                     modifier = Modifier
                         .size(52.dp)
@@ -132,11 +132,11 @@ fun AboutSettingsPage(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.FavoriteBorder,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.euthopiar.R.drawable.ic_moviehub_logo),
+                        contentDescription = "MOVIE HUB Logo",
+                        modifier = Modifier.size(34.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
                     )
                 }
 
