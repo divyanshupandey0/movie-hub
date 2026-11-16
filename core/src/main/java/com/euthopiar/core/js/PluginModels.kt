@@ -224,45 +224,47 @@ fun pluginContentId(
 }
 
 fun PluginScraper.toPluginManifest(): PluginManifest {
-    val isAdult = supportedTypes.any { it.equals("adult", ignoreCase = true) || it.equals("vault", ignoreCase = true) }
+    val types = supportedTypes ?: listOf("movie", "tv")
+    val isAdult = types.any { it.equals("adult", ignoreCase = true) || it.equals("vault", ignoreCase = true) }
     return PluginManifest(
-        id = id,
-        name = name,
+        id = id ?: "",
+        name = name ?: (id ?: "").substringAfter(":"),
         version = 1,
-        versionName = version,
+        versionName = version ?: "1.0.0",
         author = "Universal/Nuvio",
-        siteUrl = repositoryUrl,
-        description = description,
+        siteUrl = repositoryUrl ?: "",
+        description = description ?: "",
         iconUrl = logo,
-        className = "js:$id",
-        downloadUrl = filename,
+        className = "js:${id ?: ""}",
+        downloadUrl = filename ?: "",
         isBuiltIn = false,
         isEnabled = enabled,
-        supportedTypes = supportedTypes,
+        supportedTypes = types,
         isAdult = isAdult,
         isVault = false
     )
 }
 
 fun JsScraperMeta.toPluginManifest(repoUrl: String): PluginManifest {
-    val isAdult = supportedTypes.any { it.equals("adult", ignoreCase = true) || it.equals("vault", ignoreCase = true) }
-    val fullDownloadUrl = if (filename.startsWith("http")) filename else {
-        repoUrl.substringBeforeLast("/") + "/" + filename
+    val types = supportedTypes ?: listOf("movie", "tv")
+    val isAdult = types.any { it.equals("adult", ignoreCase = true) || it.equals("vault", ignoreCase = true) }
+    val fullDownloadUrl = if (filename.orEmpty().startsWith("http")) filename.orEmpty() else {
+        if (repoUrl.isNotBlank()) repoUrl.substringBeforeLast("/") + "/" + filename.orEmpty() else filename.orEmpty()
     }
     return PluginManifest(
-        id = id,
-        name = name,
+        id = id ?: "",
+        name = name ?: (id ?: "").substringAfter(":"),
         version = 1,
-        versionName = version,
+        versionName = version ?: "1.0.0",
         author = "Universal/Nuvio",
         siteUrl = repoUrl,
         description = description ?: "",
         iconUrl = logo,
-        className = "js:$id",
+        className = "js:${id ?: ""}",
         downloadUrl = fullDownloadUrl,
         isBuiltIn = false,
         isEnabled = enabled,
-        supportedTypes = supportedTypes,
+        supportedTypes = types,
         isAdult = isAdult,
         isVault = false
     )

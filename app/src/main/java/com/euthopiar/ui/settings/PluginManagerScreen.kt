@@ -1328,7 +1328,8 @@ private fun CommunitySourceCard(
                         style = AppTypography.labelSmall,
                         color = TextTertiary
                     )
-                    if (manifest.supportedTypes.isNotEmpty()) {
+                    val types = manifest.supportedTypes ?: emptyList()
+                    if (types.isNotEmpty()) {
                         Spacer(modifier = Modifier.width(Dimens.spacing8))
                         Box(
                             modifier = Modifier
@@ -1338,7 +1339,7 @@ private fun CommunitySourceCard(
                                 .padding(horizontal = Dimens.spacing8, vertical = 2.dp)
                         ) {
                             Text(
-                                text = manifest.supportedTypes.joinToString("/").uppercase(),
+                                text = types.joinToString("/").uppercase(),
                                 style = AppTypography.labelSmall,
                                 color = TextSecondary
                             )

@@ -70,7 +70,6 @@ fun AboutSettingsPage(
     val reduceMotion = LocalReduceMotion.current
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
-    var showSupportSheet by remember { mutableStateOf(false) }
 
     val versionName = remember(context) {
         try {
@@ -89,15 +88,7 @@ fun AboutSettingsPage(
     SettingsScaffold(
         title = "About MOVIE HUB",
         onBack = onBack,
-        modifier = modifier,
-        overlay = { hazeState ->
-            if (showSupportSheet) {
-                SupportEuthopiarSheet(
-                    onDismiss = { showSupportSheet = false },
-                    hazeState = hazeState
-                )
-            }
-        }
+        modifier = modifier
     ) { hazeState ->
 
         // Hero Brand Block
@@ -198,20 +189,6 @@ fun AboutSettingsPage(
                 SettingsMetadataChip(
                     text = "Lead Developer",
                     hazeState = hazeState
-                )
-            }
-        )
-
-        OpenSettingsRow(
-            title = "Support MOVIE HUB",
-            subtitle = "Buy me a coffee and help keep the application free",
-            onClick = { showSupportSheet = true },
-            trailingContent = {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = SettingsTokens.TextWhite42,
-                    modifier = Modifier.size(16.dp)
                 )
             }
         )

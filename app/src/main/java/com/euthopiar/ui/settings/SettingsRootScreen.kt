@@ -464,14 +464,16 @@ fun SettingsRootScreen(
                                     .padding(horizontal = 14.dp)
                                     .clip(RoundedCornerShape(16.dp))
                                     .onGloballyPositioned { coordinates ->
-                                        val bounds = coordinates.boundsInRoot()
-                                        val radiusPx = with(rowDensity) { 16.dp.toPx() }
-                                        com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.reportTarget(
-                                            step = com.euthopiar.ui.walkthrough.WalkthroughStep.STEP_2_PLUGINS_TILE,
-                                            bounds = bounds,
-                                            cornerRadiusPx = radiusPx,
-                                            isInteractive = false
-                                        )
+                                        if (coordinates.isAttached) {
+                                            val bounds = coordinates.boundsInRoot()
+                                            val radiusPx = with(rowDensity) { 16.dp.toPx() }
+                                            com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.reportTarget(
+                                                step = com.euthopiar.ui.walkthrough.WalkthroughStep.STEP_2_PLUGINS_TILE,
+                                                bounds = bounds,
+                                                cornerRadiusPx = radiusPx,
+                                                isInteractive = false
+                                            )
+                                        }
                                     }
                             ) {
                                 SettingsHairlineRow(
@@ -480,10 +482,13 @@ fun SettingsRootScreen(
                                     icon = SettingsPage.Plugins.icon,
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 14.dp),
                                     onClick = {
-                                        com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.onTargetTapped(
-                                            com.euthopiar.ui.walkthrough.WalkthroughStep.STEP_2_PLUGINS_TILE
-                                        )
-                                        onNavigateToPage(SettingsPage.Plugins.route)
+                                        if (com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.isActive) {
+                                            com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.onTargetTapped(
+                                                com.euthopiar.ui.walkthrough.WalkthroughStep.STEP_2_PLUGINS_TILE
+                                            )
+                                        } else {
+                                            onNavigateToPage(SettingsPage.Plugins.route)
+                                        }
                                     }
                                 )
                             }

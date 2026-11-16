@@ -196,7 +196,8 @@ fun ProviderDetailSheet(
                 }
 
                 // Supports Section
-                if (plugin.supportedTypes.isNotEmpty()) {
+                val types = plugin.supportedTypes ?: emptyList()
+                if (types.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             text = "SUPPORTS",
@@ -213,7 +214,7 @@ fun ProviderDetailSheet(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            plugin.supportedTypes.forEach { type ->
+                            types.forEach { type ->
                                 Box(
                                     modifier = Modifier
                                         .height(28.dp)

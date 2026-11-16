@@ -91,6 +91,12 @@ class PluginManagerViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     val activePluginName: StateFlow<String> = registry.activePlugin.map { it.name }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), registry.activePlugin.value.name)
 
@@ -198,8 +204,12 @@ class PluginManagerViewModel(
 
     init {
         viewModelScope.launch {
-            pluginService.installedPluginsFlow.collect { list ->
-                _installedPlugins.value = list.filterNot { it.isAdultPlugin }
+            try {
+                pluginService.installedPluginsFlow.collect { list ->
+                    _installedPlugins.value = (list ?: emptyList()).filterNot { it.isAdultPlugin }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("PluginManagerViewModel", "Error collecting installed plugins: ${e.message}")
             }
         }
         viewModelScope.launch {
@@ -208,21 +218,39 @@ class PluginManagerViewModel(
                 if (autoRepoAllowed) {
                     pluginService.checkAndAutoUpdatePlugins(installNewFromRepos = false)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.w("PluginManagerViewModel", "Auto-update error: ${e.message}")
+            }
         }
         loadPlugins()
     }
 
     fun loadPlugins() {
         viewModelScope.launch {
+            _isLoading.value = true
             _isRefreshing.value = true
+            _errorMessage.value = null
             try {
-                addonRepository.initialize()
-                val installed = pluginService.getInstalledPlugins().distinctBy { it.id }
+                try {
+                    addonRepository.initialize()
+                } catch (e: Exception) {
+                    android.util.Log.w("PluginManagerViewModel", "Addon init warning: ${e.message}")
+                }
+
+                val installed = try {
+                    pluginService.getInstalledPlugins().distinctBy { it.id }
+                } catch (e: Exception) {
+                    android.util.Log.e("PluginManagerViewModel", "Failed to get installed plugins", e)
+                    emptyList()
+                }
                 _installedPlugins.value = installed.filterNot { it.isAdultPlugin }
 
                 // Fetch community plugins from configured repos in parallel
-                val urls = preferencesRepository.repositoryUrls.first()
+                val urls = try {
+                    preferencesRepository.repositoryUrls.first()
+                } catch (e: Exception) {
+                    emptySet()
+                }
                 val activeUrls = urls.filter { it.isNotBlank() }
 
                 val repoResults = coroutineScope {
@@ -230,7 +258,7 @@ class PluginManagerViewModel(
                         async(Dispatchers.IO) {
                             try {
                                 val repoIndex = pluginService.fetchRepository(url)
-                                val repoPlugins = repoIndex.plugins.filterNot { it.isAdultPlugin }
+                                val repoPlugins = (repoIndex.plugins ?: emptyList()).filterNot { it.isAdultPlugin }
                                 if (repoPlugins.isNotEmpty()) {
                                     val repoName = if (repoIndex.name.isNotBlank() && !repoIndex.name.equals("manifest", ignoreCase = true)) {
                                         repoIndex.name
@@ -240,12 +268,13 @@ class PluginManagerViewModel(
                                     val repoInfo = ProviderRepoInfo(
                                         url = url,
                                         name = repoName,
-                                        description = repoIndex.description,
+                                        description = repoIndex.description ?: "",
                                         plugins = repoPlugins
                                     )
                                     Pair(repoInfo, repoPlugins)
                                 } else null
-                            } catch (_: Exception) {
+                            } catch (e: Exception) {
+                                android.util.Log.w("PluginManagerViewModel", "Failed to fetch repo $url", e)
                                 null
                             }
                         }
@@ -262,7 +291,11 @@ class PluginManagerViewModel(
                 if (currentSelected != null) {
                     _selectedProviderRepo.value = discoveredRepos.find { it.url == currentSelected.url }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("PluginManagerViewModel", "Error loading plugins", e)
+                _errorMessage.value = e.localizedMessage ?: "Failed to load plugins and scrapers"
             } finally {
+                _isLoading.value = false
                 _isRefreshing.value = false
             }
         }

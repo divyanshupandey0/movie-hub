@@ -192,18 +192,10 @@ class PreferencesKeyMappingTest {
     }
 
     @Test
-    fun testSupportEuthopiarSettingsSearchIndexing() {
+    fun testSupportEuthopiarRemovedFromSettingsSearch() {
         val entries = com.euthopiar.ui.settings.search.getAllSettingsSearchEntries()
         val supportEntry = entries.firstOrNull { it.id == "support_euthopiar" }
-        assertNotNull("support_euthopiar search entry must be present", supportEntry)
-        assertEquals("Support MOVIE HUB", supportEntry!!.title)
-        assertEquals(com.euthopiar.ui.settings.models.SettingsCategory.About, supportEntry.category)
-        assertEquals(com.euthopiar.ui.settings.models.SettingsPage.About, supportEntry.page)
-
-        val requiredKeywords = listOf("donate", "coffee", "support", "sponsor", "contribution", "tip")
-        for (kw in requiredKeywords) {
-            assertTrue("Keywords must include '$kw'", supportEntry.keywords.contains(kw))
-        }
+        org.junit.Assert.assertNull("support_euthopiar search entry must not be present", supportEntry)
     }
 
     @Test

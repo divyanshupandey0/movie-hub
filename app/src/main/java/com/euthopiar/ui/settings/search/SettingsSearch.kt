@@ -295,15 +295,6 @@ fun getAllSettingsSearchEntries(): List<SettingsSearchEntry> = listOf(
         page = SettingsPage.About,
         keywords = listOf("privacy", "security", "telemetry", "tracking", "data", "local keys", "analytics"),
         icon = Icons.Outlined.Security
-    ),
-    SettingsSearchEntry(
-        id = "support_euthopiar",
-        title = "Support MOVIE HUB",
-        description = "Buy me a coffee and help keep the application free",
-        category = SettingsCategory.About,
-        page = SettingsPage.About,
-        keywords = listOf("donate", "coffee", "support", "sponsor", "contribution", "tip"),
-        icon = Icons.Outlined.Coffee
     )
 )
 

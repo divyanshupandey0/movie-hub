@@ -24,7 +24,7 @@ data class PluginManifest(
 ) {
     val isAdultPlugin: Boolean
         get() = isAdult || isVault ||
-                supportedTypes.any { it.equals("ADULT", ignoreCase = true) || it.equals("VAULT", ignoreCase = true) }
+                (supportedTypes ?: emptyList()).any { it.equals("ADULT", ignoreCase = true) || it.equals("VAULT", ignoreCase = true) }
 }
 
 @Serializable

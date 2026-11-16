@@ -137,16 +137,16 @@ fun RepoPluginsScreen(
         when (selectedCategory) {
             "All" -> plugins
             "Movies" -> plugins.filter { p ->
-                p.supportedTypes.any { it.contains("movie", ignoreCase = true) }
+                (p.supportedTypes ?: emptyList()).any { it.contains("movie", ignoreCase = true) }
             }
             "TV Series" -> plugins.filter { p ->
-                p.supportedTypes.any { it.contains("series", ignoreCase = true) || it.contains("tv", ignoreCase = true) }
+                (p.supportedTypes ?: emptyList()).any { it.contains("series", ignoreCase = true) || it.contains("tv", ignoreCase = true) }
             }
             "Anime" -> plugins.filter { p ->
-                p.supportedTypes.any { it.contains("anime", ignoreCase = true) }
+                (p.supportedTypes ?: emptyList()).any { it.contains("anime", ignoreCase = true) }
             }
             "Asian Dramas" -> plugins.filter { p ->
-                p.supportedTypes.any { it.contains("drama", ignoreCase = true) || it.contains("asian", ignoreCase = true) }
+                (p.supportedTypes ?: emptyList()).any { it.contains("drama", ignoreCase = true) || it.contains("asian", ignoreCase = true) }
             }
             else -> plugins
         }

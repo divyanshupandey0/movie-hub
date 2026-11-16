@@ -97,6 +97,8 @@ fun PluginsSettingsPage(
     val repositoryUrls by viewModel.repositoryUrls.collectAsState()
     val addonsUiState by viewModel.addonsUiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     val testingIds by viewModel.testingPluginIds.collectAsState()
     val healthMap by viewModel.pluginHealthMap.collectAsState()
 
@@ -171,7 +173,7 @@ fun PluginsSettingsPage(
             base.filter { p ->
                 p.name.lowercase().contains(q) ||
                 p.description.lowercase().contains(q) ||
-                p.supportedTypes.any { it.lowercase().contains(q) } ||
+                (p.supportedTypes ?: emptyList()).any { it.lowercase().contains(q) } ||
                 p.id.lowercase().contains(q)
             }
         }
@@ -435,14 +437,16 @@ fun PluginsSettingsPage(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .onGloballyPositioned { coordinates ->
-                                            val bounds = coordinates.boundsInRoot()
-                                            val radiusPx = with(repoCardDensity) { 20.dp.toPx() }
-                                            com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.reportTarget(
-                                                step = com.euthopiar.ui.walkthrough.WalkthroughStep.STEP_3_INSTALL_REPO,
-                                                bounds = bounds,
-                                                cornerRadiusPx = radiusPx,
-                                                isInteractive = true
-                                            )
+                                            if (coordinates.isAttached) {
+                                                val bounds = coordinates.boundsInRoot()
+                                                val radiusPx = with(repoCardDensity) { 20.dp.toPx() }
+                                                com.euthopiar.ui.walkthrough.WalkthroughCoordinator.instance.reportTarget(
+                                                    step = com.euthopiar.ui.walkthrough.WalkthroughStep.STEP_3_INSTALL_REPO,
+                                                    bounds = bounds,
+                                                    cornerRadiusPx = radiusPx,
+                                                    isInteractive = true
+                                                )
+                                            }
                                         }
                                         .clip(RoundedCornerShape(20.dp))
                                         .background(Color.White.copy(alpha = 0.04f))
