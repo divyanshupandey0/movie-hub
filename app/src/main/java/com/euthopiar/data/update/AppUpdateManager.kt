@@ -111,8 +111,7 @@ fun isRemoteUpdateAvailable(
 
     // 1. Numerical comparison on versionCode if both are valid positive integers
     if (remoteVersionCode > 0 && currentVersionCode > 0) {
-        if (remoteVersionCode > currentVersionCode) return true
-        if (remoteVersionCode < currentVersionCode) return false
+        return remoteVersionCode > currentVersionCode
     }
 
     // 2. Fallback: semantic comparison on versionName
@@ -316,10 +315,23 @@ class AppUpdateManager private constructor(private val context: Context) {
             0
         }
 
+        // Support explicit versionCode in release notes or release title
+        val explicitVersionCode = try {
+            val body = json.optString("body", "")
+            val title = json.optString("name", "")
+            val regex = Regex("""(?i)\b(?:versionCode|code|build|vc)[:=\s]+(\d+)\b""")
+            regex.find(body)?.groupValues?.get(1)?.toIntOrNull()
+                ?: regex.find(title)?.groupValues?.get(1)?.toIntOrNull()
+        } catch (_: Exception) {
+            null
+        }
+
+        val resolvedVersionCode = explicitVersionCode ?: inferredVersionCode
+
         return ReleaseInfo(
             tagName = tagName,
             versionName = versionName,
-            versionCode = inferredVersionCode,
+            versionCode = resolvedVersionCode,
             releaseTitle = releaseTitle,
             changelog = changelog,
             publishedAt = publishedAt.substringBefore("T"),
@@ -518,8 +530,8 @@ class AppUpdateManager private constructor(private val context: Context) {
             archiveInfo.versionCode
         }
         val currentCode = getCurrentVersionCode()
-        if (archiveVersionCode > 0 && currentCode > 0 && archiveVersionCode < currentCode) {
-            return "Cannot downgrade: Downloaded version ($archiveVersionCode) is older than installed version ($currentCode)."
+        if (archiveVersionCode > 0 && currentCode > 0 && archiveVersionCode <= currentCode) {
+            return "Cannot install update: Downloaded APK version (code $archiveVersionCode) is not newer than currently installed version (code $currentCode)."
         }
         val installedSignatures = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -594,10 +606,57 @@ class AppUpdateManager private constructor(private val context: Context) {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
+            markAutoPopupShownForSession()
             context.startActivity(installIntent)
         } catch (_: Exception) {
             openInBrowser(fallbackUrl)
         }
+    }
+
+    /**
+     * Refreshes installed version against the current update state.
+     * Transitions from UpdateAvailable to UpToDate if installed version now matches or exceeds the remote release.
+     */
+    fun refreshInstalledVersion(): Boolean {
+        val currentVersion = getCurrentVersionName()
+        val currentCode = getCurrentVersionCode()
+
+        scope.launch(Dispatchers.IO) {
+            val lastSavedCode = preferencesRepository.lastAppVersionCode.first()
+            if (lastSavedCode != currentCode) {
+                preferencesRepository.setLastAppVersionCode(currentCode)
+                preferencesRepository.setLastAppVersion(currentVersion)
+            }
+        }
+
+        val state = _updateState.value
+        if (state is UpdateCheckState.UpdateAvailable) {
+            val isStillNewer = isRemoteUpdateAvailable(
+                currentVersionCode = currentCode,
+                remoteVersionCode = state.release.versionCode,
+                currentVersionName = currentVersion,
+                remoteVersionName = state.release.versionName
+            )
+            if (!isStillNewer) {
+                _updateState.value = UpdateCheckState.UpToDate(currentVersion, state.release)
+                _downloadState.value = ApkDownloadState.Idle
+                _autoPopupShownForSession.value = true
+                cleanUpDownloadedApk()
+                return true
+            }
+        } else if (state is UpdateCheckState.Idle || state is UpdateCheckState.UpToDate) {
+            cleanUpDownloadedApk()
+        }
+        return false
+    }
+
+    fun cleanUpDownloadedApk() {
+        try {
+            val updatesDir = File(context.cacheDir, "updates")
+            if (updatesDir.exists()) {
+                updatesDir.deleteRecursively()
+            }
+        } catch (_: Exception) {}
     }
 
     fun openInBrowser(url: String) {

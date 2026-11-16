@@ -5,7 +5,7 @@
 # MOVIE HUB
 ### YOUR ENTERTAINMENT. ONE CINEMATIC HUB.
 
-[![Version](https://img.shields.io/badge/VERSION-v1.1.1-D4AF37?style=for-the-badge&labelColor=101010)](https://github.com/divyanshupandey0/movie-hub/releases/latest)
+[![Version](https://img.shields.io/badge/VERSION-v1.1.2-D4AF37?style=for-the-badge&labelColor=101010)](https://github.com/divyanshupandey0/movie-hub/releases/latest)
 [![Platform](https://img.shields.io/badge/PLATFORM-ANDROID-D4AF37?style=for-the-badge&logo=android&logoColor=D4AF37&labelColor=101010)](https://github.com/divyanshupandey0/movie-hub)
 [![Language](https://img.shields.io/badge/LANGUAGE-KOTLIN-D4AF37?style=for-the-badge&logo=kotlin&logoColor=D4AF37&labelColor=101010)](https://kotlinlang.org)
 [![UI](https://img.shields.io/badge/UI-JETPACK_COMPOSE-D4AF37?style=for-the-badge&labelColor=101010)](https://developer.android.com/jetpack/compose)
@@ -157,7 +157,7 @@ The **Ecosystem & Plugins** engine gives MOVIE HUB its unmatched modular power:
 
 ### Step-by-Step Installation
 
-1. **Download APK:** Get the latest `MOVIE-HUB-v1.1.1.apk` from the [GitHub Releases](https://github.com/divyanshupandey0/movie-hub/releases/latest) page.
+1. **Download APK:** Get the latest `MOVIE-HUB-v1.1.2.apk` from the [GitHub Releases](https://github.com/divyanshupandey0/movie-hub/releases/latest) page.
 2. **Open File:** Tap the downloaded APK in your notification drawer or Downloads folder.
 3. **Allow Installation:** If prompted by Android, enable *"Install unknown apps"* for your browser or file manager.
 4. **Install:** Tap **Install** and wait for the package installer to finish.

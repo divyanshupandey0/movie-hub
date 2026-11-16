@@ -50,7 +50,7 @@ fun UpdateSettingsPage(
     val includePrereleases by preferencesRepository.includePrereleases.collectAsState(initial = false)
     val lastUpdateCheckTimestamp by preferencesRepository.lastUpdateCheckTimestamp.collectAsState(initial = 0L)
 
-    val currentVersion = remember(context) { updateManager.getCurrentVersionName() }
+    val currentVersion = remember(context, updateState) { updateManager.getCurrentVersionName() }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var activeDialogRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
 

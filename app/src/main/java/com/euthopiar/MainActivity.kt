@@ -205,6 +205,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         PipController.onRequestPip = { enterPipMode() }
+        com.euthopiar.data.update.AppUpdateManager.getInstance(applicationContext).refreshInstalledVersion()
         lifecycleScope.launch(Dispatchers.IO) {
             com.euthopiar.data.sync.supabase.SupabaseSyncManager.getInstance(applicationContext).syncAll()
         }

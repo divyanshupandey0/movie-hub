@@ -167,6 +167,8 @@ fun HomeScreen(
                 showUpdateDialog = true
                 updateManager.markAutoPopupShownForSession()
             }
+        } else if (showUpdateDialog) {
+            showUpdateDialog = false
         }
     }
 
@@ -178,9 +180,12 @@ fun HomeScreen(
         if (uiState !is HomeUiState.Success) return@LaunchedEffect
 
         val currentVersion = updateManager.getCurrentVersionName()
+        val currentCode = updateManager.getCurrentVersionCode()
         val lastSavedVersion = preferencesRepository.lastAppVersion.first()
-        if (lastSavedVersion != currentVersion) {
+        val lastSavedCode = preferencesRepository.lastAppVersionCode.first()
+        if (lastSavedVersion != currentVersion || lastSavedCode != currentCode) {
             preferencesRepository.setLastAppVersion(currentVersion)
+            preferencesRepository.setLastAppVersionCode(currentCode)
         }
         versionEvaluatedThisSession = true
     }

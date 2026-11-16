@@ -147,6 +147,37 @@ class AppUpdateManagerTest {
             )
         )
 
+        // Production verification: installed 1.1.1 (code 111) against GitHub release v1.1.2 (code 112)
+        assertTrue(
+            "Installed 1.1.1 must detect release 1.1.2 with higher versionCode as a new update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 111,
+                remoteVersionCode = 112,
+                currentVersionName = "1.1.1",
+                remoteVersionName = "1.1.2"
+            )
+        )
+
+        assertFalse(
+            "Installed 1.1.2 must not detect release 1.1.2 as an update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 112,
+                remoteVersionCode = 112,
+                currentVersionName = "1.1.2",
+                remoteVersionName = "1.1.2"
+            )
+        )
+
+        assertFalse(
+            "Installed 1.1.2 must not downgrade to release 1.1.1",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 112,
+                remoteVersionCode = 111,
+                currentVersionName = "1.1.2",
+                remoteVersionName = "1.1.1"
+            )
+        )
+
         assertFalse(
             "Installed 1.0.2 must not detect v1.0.2 as an update",
             isRemoteUpdateAvailable(
