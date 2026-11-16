@@ -1,310 +1,81 @@
-<div align="center">
+# 🎬 MOVIE HUB
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:E50914,50:8A0710,100:141414&height=230&section=header&text=MOVIE%20HUB&fontSize=76&fontColor=ffffff&fontAlignY=38&desc=Movies%20%C2%B7%20Series%20%C2%B7%20Anime%20%E2%80%94%20one%20beautiful%20app&descAlignY=60&descSize=20&animation=fadeIn" width="100%" alt="MOVIE HUB banner"/>
+**Your Ultimate Movies & TV Series Experience**
 
-<img src="screenshots/logo.jpg" width="150" alt="MOVIE HUB logo" style="border-radius:32px"/>
-
-<a href="https://github.com/TheARCreactorGUY/Euthopiar/releases/latest">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=2800&pause=900&color=E50914&center=true&vCenter=true&width=640&lines=Stream+smarter.+Binge+harder.;Netflix-style+UI.+Zero+clutter.;Movies.+Series.+Anime.+One+app.;Plugin+powered+via+Nuvio." alt="Typing animation"/>
-</a>
-
-<br/>
-
-[![Latest Release](https://img.shields.io/badge/Release-v1.1.0--Stable-E50914?style=for-the-badge&logo=github&logoColor=white)](https://github.com/TheARCreactorGUY/Euthopiar/releases/latest)
-[![Platform](https://img.shields.io/badge/Android-Available-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/TheARCreactorGUY/Euthopiar/releases/latest)
-[![Android TV](https://img.shields.io/badge/Android%20TV-Coming%20Soon-F5A623?style=for-the-badge&logo=android&logoColor=white)](#-roadmap)
-[![Kotlin](https://img.shields.io/badge/Kotlin-100%25-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-[![Open Source](https://img.shields.io/badge/Open%20Source-Yes-brightgreen?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](https://github.com/TheARCreactorGUY/Euthopiar)
-
-<br/>
-
-![Stars](https://img.shields.io/github/stars/TheARCreactorGUY/Euthopiar?style=flat-square&logo=github&color=E50914&labelColor=141414)
-![Forks](https://img.shields.io/github/forks/TheARCreactorGUY/Euthopiar?style=flat-square&logo=github&color=E50914&labelColor=141414)
-![Downloads](https://img.shields.io/github/downloads/TheARCreactorGUY/Euthopiar/total?style=flat-square&color=E50914&labelColor=141414)
-![Issues](https://img.shields.io/github/issues/TheARCreactorGUY/Euthopiar?style=flat-square&color=E50914&labelColor=141414)
-![Last Commit](https://img.shields.io/github/last-commit/TheARCreactorGUY/Euthopiar?style=flat-square&color=E50914&labelColor=141414)
-
-<br/>
-
-[![Download APK](https://img.shields.io/badge/⬇%20%20DOWNLOAD%20APK-E50914?style=for-the-badge&logoColor=white&labelColor=141414)](https://github.com/TheARCreactorGUY/Euthopiar/releases/latest)
-[![All Releases](https://img.shields.io/badge/📦%20%20ALL%20RELEASES-141414?style=for-the-badge&logoColor=white&labelColor=E50914)](https://github.com/TheARCreactorGUY/Euthopiar/releases)
-[![Support](https://img.shields.io/badge/☕%20%20SUPPORT-FFDD00?style=for-the-badge&logoColor=black&labelColor=000000)](https://buymeacoffee.com/TheARCreactorGUY)
-
-</div>
-
-<br/>
-
-<p align="center">
-  <a href="#-screenshots">Screenshots</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#-plugin-system">Plugins</a> ·
-  <a href="#-install-in-60-seconds">Install</a> ·
-  <a href="#-build-from-source">Build</a> ·
-  <a href="#-roadmap">Roadmap</a> ·
-  <a href="#-faq">FAQ</a>
-</p>
-
-<img src="https://capsule-render.vercel.app/api?type=rect&color=0:E50914,100:141414&height=3&section=header" width="100%" alt="divider"/>
-
-## 🎬 What is MOVIE HUB?
-
-> **MOVIE HUB** is a modern, Netflix-style Android app for discovering and watching **movies, TV series and anime**.
-> Dark cinematic design. Huge posters. Buttery navigation. Find something to watch in **seconds**, not minutes.
-
-<table>
-<tr>
-<td align="center" width="25%"><h3>🎞️</h3><b>Movies</b><br/><sub>Blockbusters to hidden gems</sub></td>
-<td align="center" width="25%"><h3>📺</h3><b>Series</b><br/><sub>Every season, every episode</sub></td>
-<td align="center" width="25%"><h3>🌸</h3><b>Anime</b><br/><sub>Sub, dub, classics & new drops</sub></td>
-<td align="center" width="25%"><h3>🔌</h3><b>Plugins</b><br/><sub>Nuvio-compatible out of the box</sub></td>
-</tr>
-</table>
-
-<br/>
-
-## 📸 Screenshots
-
-<div align="center">
-
-| 🏠 Home | 🔥 Trending | 🎞️ Details |
-|:---:|:---:|:---:|
-| <img src="screenshots/home.jpg" width="250"/> | <img src="screenshots/trending.jpg" width="250"/> | <img src="screenshots/details.jpg" width="250"/> |
-
-| 🔍 Search | 📚 Library |
-|:---:|:---:|
-| <img src="screenshots/search.jpg" width="250"/> | <img src="screenshots/library.jpg" width="250"/> |
-
-</div>
-
-<br/>
+MOVIE HUB is an Android entertainment application designed to bring movies and TV series discovery, details, and streaming playback together in one place.
 
 ## ✨ Features
 
-<table>
-<tr>
-<td width="50%" valign="top">
+- 🏠 Modern Home Screen
+- 🎥 Movies & TV Series
+- 🔥 Trending and Popular Content
+- 🔎 Search and Discovery
+- 📺 Movie and Series Details
+- ▶️ Integrated Media Player
+- 🔌 Plugin & Repository Support
+- ⚙️ Customizable Settings
+- 🎨 Modern User Interface
 
-### 🏠 Cinematic Home
-A giant featured banner, **Top 10 Today**, **Trending Today** and genre rows that make browsing feel like a premiere night.
+## 📱 Screenshots
 
-### 🔍 Smart Search
-Search movies, series & anime, then slice results by **type, genre and year**. Find the exact vibe you want.
+<!-- Add your latest MOVIE HUB app screenshots here -->
 
-### 🎞️ Rich Details & Trailer Cinema
-**IMDb** and **Rotten Tomatoes** ratings, full cast & crew, and instant zero-overlay native ExoPlayer trailer preview with letterbox zoom.
-
-### ☁️ Google Cloud, Trakt.tv & Simkl Sync
-One-tap Google Cloud Account sync (playback, watchlist, playlists & settings) plus two-way Trakt.tv & Simkl scrobbling across all your devices.
-
-### 📥 Downloads & Offline Mode
-Save titles and watch **offline**. Planes, trains, dead zones, no problem.
-
-</td>
-<td width="50%" valign="top">
-
-### 🔖 Watchlist & Playlists
-Bookmark favourites and organise them into your own playlists, your way.
-
-### ▶️ Continue Watching
-Pick up **exactly** where you left off with smart progress badges and cached poster hydration.
-
-### 🧭 Guided Setup Walkthrough
-Interactive spotlight tour guiding you through Profile, Plugins, and Repository setup in 3 quick steps for zero-friction streaming.
-
-### 🔌 Nuvio & Stremio Compatible
-Built-in support for Nuvio scrapers and Stremio addons with DASH (.mpd) manifests and intelligent native UA fallback.
-
-### 🎨 High-Craft Lucide UI & Dynamic Card Scaling
-Precision 2.0px Lucide iconography, 3-tier dynamic card scaling (`Compact`, `Balanced`, `Flagship`) with inline IMDb badges, and Emil Kowalski tactile physics.
-
-</td>
-</tr>
-</table>
-
-<br/>
-
-## 🔌 Plugin System
-
-<div align="center">
-
-### ✅ Modular & Extensible Architecture
-
-Euthopiar provides a flexible plugin engine supporting custom and community-maintained provider manifests. You can connect your manifest directly within the app:
-
-**Settings → Plugins → Add Manifest**
-
-</div>
-
-```mermaid
-flowchart LR
-    A([📱 Euthopiar]) -->|configures manifest| B[🔌 Plugin Engine]
-    B --> C[(🌐 Custom Providers)]
-    C -->|metadata & streams| A
-    A --> D[▶️ Player]
-    style A fill:#E50914,stroke:#fff,color:#fff
-    style B fill:#141414,stroke:#E50914,color:#fff
-    style C fill:#141414,stroke:#E50914,color:#fff
-    style D fill:#141414,stroke:#3DDC84,color:#fff
-```
-
-<br/>
-
-## ⚡ Install in 60 Seconds
-
-<table>
-<tr>
-<td align="center" width="20%"><h2>1️⃣</h2><sub>Open the <b><a href="https://github.com/TheARCreactorGUY/Euthopiar/releases/latest">Latest Release</a></b></sub></td>
-<td align="center" width="20%"><h2>2️⃣</h2><sub>Download the <b>.apk</b></sub></td>
-<td align="center" width="20%"><h2>3️⃣</h2><sub>Open it & allow <i>“Install from unknown sources”</i></sub></td>
-<td align="center" width="20%"><h2>4️⃣</h2><sub>Launch Euthopiar 🍿</sub></td>
-<td align="center" width="20%"><h2>5️⃣</h2><sub>Follow the 3-step setup walkthrough to add plugins 🔌</sub></td>
-</tr>
-</table>
-
-<div align="center">
-
-[![Download Latest](https://img.shields.io/badge/⬇%20%20GET%20v1.1.0--Stable-E50914?style=for-the-badge)](https://github.com/TheARCreactorGUY/Euthopiar/releases/latest)
-
-</div>
-
-<br/>
-
-## 📱 Platform Availability
-
-| Platform | Status |
+| Home Screen | Movies |
 |---|---|
-| 📱 **Android Smartphone App** | ✅ **Available now**, [Download](https://github.com/TheARCreactorGUY/Euthopiar/releases/latest) |
-| 📺 **Android TV App** | 🚧 **Coming soon**, stay tuned! |
+| Add screenshot | Add screenshot |
 
-<br/>
+| Details | Player |
+|---|---|
+| Add screenshot | Add screenshot |
 
-## 🛠️ Build From Source
+## 🛠️ Technology
+
+- Kotlin
+- Android SDK
+- Gradle
+- Jetpack Compose
+- TMDB API
+- Plugin Repository Integration
+
+## 📥 Installation
+
+1. Open the Releases section of this repository.
+2. Download the latest available APK.
+3. Install it on your Android device.
+4. Open MOVIE HUB.
+
+## 🔨 Build From Source
+
+Clone the repository:
 
 ```bash
-git clone https://github.com/TheARCreactorGUY/Euthopiar.git
-cd Euthopiar
-./gradlew assembleDebug
+git clone https://github.com/divyanshupandey0/movie-hub.git
 ```
 
-> 📦 Your APK will be waiting in `app/build/outputs/apk/debug/`
+Open the project in Android Studio.
 
-<details>
-<summary><b>🧰 Requirements</b></summary>
+Build the debug APK on Windows:
 
-<br/>
+```powershell
+.\gradlew.bat assembleDebug
+```
 
-- Android Studio (latest stable recommended)
-- JDK 17+
-- Android SDK with a recent platform installed
+APK output:
 
-</details>
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-<br/>
+## 👨‍💻 Developer
 
-## 🗺️ Roadmap
+**AYUSH**
 
-- [x] 🏠 Cinematic home with Top 10 & Trending
-- [x] 🔍 Search with type / genre / year filters
-- [x] 🎞️ Rich details with IMDb & Rotten Tomatoes ratings
-- [x] 📥 Offline downloads
-- [x] 🔖 Watchlist & playlists
-- [x] ▶️ Continue Watching
-- [x] 🔌 Nuvio plugin compatibility
-- [x] 🧭 Interactive guided setup walkthrough & spotlight onboarding
-- [x] ⚡ In-app OTA update notifier & rich changelog viewer
-- [x] ☁️ Trakt.tv & Simkl two-way cloud sync & scrobbling
-- [x] 🎬 Native zero-overlay trailer cinema player
-- [x] 🎨 High-craft Lucide vector design system & Material You monochrome icon
-- [x] 🔑 One-tap Google Cloud Account & real-time cross-device sync
-- [x] 📐 Dynamic 3-tier card scaling & inline IMDb rating badges
-- [ ] 📺 **Android TV app**
-- [ ] 🎨 More themes & customization
-- [ ] 💡 Your idea here, [open an issue](https://github.com/TheARCreactorGUY/Euthopiar/issues)!
+GitHub: https://github.com/divyanshupandey0
 
-<br/>
+## 📄 License
 
-## ❓ FAQ
+Refer to the LICENSE file in this repository, if available.
 
-<details>
-<summary><b>Is Euthopiar free?</b></summary>
+---
 
-<br/>
-
-Yes. Free and open source, no strings attached.
-
-</details>
-
-<details>
-<summary><b>How do I configure provider plugins?</b></summary>
-
-<br/>
-
-Euthopiar works with Nuvio-compatible plugins. Add the manifest link in **Settings → Plugins → Add Manifest**.
-
-</details>
-
-<details>
-<summary><b>Is there an iOS or desktop version?</b></summary>
-
-<br/>
-
-Not right now. Android is live, and **Android TV** is next on the list.
-
-</details>
-
-<details>
-<summary><b>Found a bug or have an idea?</b></summary>
-
-<br/>
-
-[Open an issue](https://github.com/TheARCreactorGUY/Euthopiar/issues). Bug reports and feature requests are very welcome.
-
-</details>
-
-<br/>
-
-## ⚠️ Disclaimer
-
-> Euthopiar does **not** host or store any media. Content is provided by third-party plugins/sources added by the user. Please respect copyright laws in your country.
-
-> *MOVIE HUB uses Trakt but is not endorsed or certified by Trakt.*
-
-<br/>
-
-## ☕ Support the Project
-
-MOVIE HUB is **free and open source**.
-
-**Lead Developer / Maintainer:** AYUSH If you enjoy it, buying me a coffee helps keep the app alive and growing!
-
-<div align="center">
-
-[![Buy Me A Coffee](https://img.shields.io/badge/☕%20%20BUY%20ME%20A%20COFFEE-FFDD00?style=for-the-badge&logoColor=black&labelColor=000000)](https://buymeacoffee.com/TheARCreactorGUY)
-
-<a href="https://buymeacoffee.com/TheARCreactorGUY"><img src="screenshots/bmc-qr.png" width="200" alt="Buy Me A Coffee QR code"/></a>
-
-*Scan the QR code or click the button above.*
-
-</div>
-
-<br/>
-
-## ⭐ Star the Repo
-
-Can't donate? A **star ⭐** is free and helps a ton!
-
-<div align="center">
-
-<a href="https://star-history.com/#TheARCreactorGUY/Euthopiar&Date">
-  <img src="https://api.star-history.com/svg?repos=TheARCreactorGUY/Euthopiar&type=Date&theme=dark" width="520" alt="Star History Chart"/>
-</a>
-
-</div>
-
-<br/>
-
-<div align="center">
-
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:141414,50:8A0710,100:E50914&height=140&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20AYUSH&fontSize=22&fontColor=ffffff&fontAlignY=70" width="100%" alt="footer"/>
-
-</div>
+**MOVIE HUB — Discover. Explore. Enjoy.**
