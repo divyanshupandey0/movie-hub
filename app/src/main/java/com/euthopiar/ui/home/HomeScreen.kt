@@ -166,6 +166,7 @@ fun HomeScreen(
         if (available != null) {
             val shouldShow = available.isMandatory || (!autoPopupShown && available.release.versionName != skippedUpdateVersion)
             if (shouldShow && !showUpdateDialog) {
+                delay(600L)
                 showUpdateDialog = true
                 updateManager.markAutoPopupShownForSession()
             }

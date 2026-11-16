@@ -119,7 +119,7 @@ class AppUpdateManagerTest {
         assertFalse(
             "isRemoteUpdateAvailable should return false for current release v1.0.1 against 1.1.0-Stable",
             isRemoteUpdateAvailable(
-                currentVersionCode = 11,
+                currentVersionCode = 110,
                 remoteVersionCode = 101,
                 currentVersionName = installedVersion,
                 remoteVersionName = "1.0.1"
@@ -129,10 +129,31 @@ class AppUpdateManagerTest {
         assertTrue(
             "isRemoteUpdateAvailable should return true when a newer version like 1.2.0 is released",
             isRemoteUpdateAvailable(
-                currentVersionCode = 11,
+                currentVersionCode = 110,
                 remoteVersionCode = 120,
                 currentVersionName = installedVersion,
                 remoteVersionName = "1.2.0"
+            )
+        )
+
+        // Production verification: installed 1.0.1 against GitHub release v1.0.2
+        assertTrue(
+            "Installed 1.0.1 must detect GitHub release v1.0.2 as a new update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 101,
+                remoteVersionCode = 102,
+                currentVersionName = "1.0.1",
+                remoteVersionName = "1.0.2"
+            )
+        )
+
+        assertFalse(
+            "Installed 1.0.2 must not detect v1.0.2 as an update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 102,
+                remoteVersionCode = 102,
+                currentVersionName = "1.0.2",
+                remoteVersionName = "1.0.2"
             )
         )
     }

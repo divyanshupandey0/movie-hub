@@ -73,6 +73,14 @@ fun UpdateSettingsPage(
     val upToDateRelease = (updateState as? UpdateCheckState.UpToDate)?.latestRelease
     val displayRelease = availableRelease ?: upToDateRelease
 
+    LaunchedEffect(updateState) {
+        if (updateState is UpdateCheckState.UpdateAvailable) {
+            val available = (updateState as UpdateCheckState.UpdateAvailable).release
+            activeDialogRelease = available
+            showUpdateDialog = true
+        }
+    }
+
     fun openUrl(url: String) {
         try {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -139,7 +147,7 @@ fun UpdateSettingsPage(
                     Icon(
                         imageVector = Icons.Outlined.SystemUpdateAlt,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = Color(0xFFFFD54F),
                         modifier = Modifier.size(24.dp)
                     )
                 }

@@ -2,13 +2,11 @@ package com.euthopiar.ui.components
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -39,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,14 +44,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.euthopiar.R
 import com.euthopiar.data.update.ApkDownloadState
 import com.euthopiar.data.update.AppUpdateManager
 import com.euthopiar.data.update.ReleaseInfo
 import com.euthopiar.data.update.isRemoteVersionNewer
 import com.euthopiar.ui.navigation.LocalNavbarVisible
-import com.euthopiar.ui.settings.components.SettingsTokens
 import com.euthopiar.ui.settings.components.settingsPressable
 import com.euthopiar.ui.theme.AppFontFamily
 import com.euthopiar.ui.theme.LocalAmoledMode
@@ -75,7 +74,7 @@ sealed interface ChangelogNode {
 }
 
 /**
- * Parsed changelog containing extracted release photos (1-2 images) and structured text nodes.
+ * Parsed changelog containing extracted release photos and structured text nodes.
  */
 data class ParsedChangelog(
     val photos: List<String>,
@@ -101,72 +100,72 @@ fun parseReleaseChangelog(rawText: String): ParsedChangelog {
         )
     }
 
-    val imgMdRegex = Regex("""!\[.*?\]\((https?://[^\s\)]+)\)""")
-    val imgHtmlRegex = Regex("""<img[^>]*src=["'](https?://[^"']+)["'][^>]*>""", RegexOption.IGNORE_CASE)
-    val standaloneImgRegex = Regex("""^https?://[^\s]+\.(?:png|jpg|jpeg|webp|gif)(?:\?[^\s]*)?$""", RegexOption.IGNORE_CASE)
-
     val extractedPhotos = mutableListOf<String>()
-
-    imgMdRegex.findAll(rawText).forEach { m ->
-        extractedPhotos.add(m.groupValues[1])
-    }
-    imgHtmlRegex.findAll(rawText).forEach { m ->
-        extractedPhotos.add(m.groupValues[1])
-    }
-
-    var cleanText = rawText
-    cleanText = imgMdRegex.replace(cleanText, "")
-    cleanText = imgHtmlRegex.replace(cleanText, "")
-
     val nodes = mutableListOf<ChangelogNode>()
-    val lines = cleanText.lines()
 
+    // Regex 1: Markdown image syntax ![alt](url)
+    val mdImgRegex = Regex("""!\[.*?\]\((https?://\S+?\.(?:png|jpg|jpeg|webp|gif)(?:\?\S*)?)\)""", RegexOption.IGNORE_CASE)
+    // Regex 2: HTML <img> tag with src
+    val htmlImgRegex = Regex("""<img[^>]+src=["'](https?://\S+?\.(?:png|jpg|jpeg|webp|gif)(?:\?\S*)?)["'][^>]*>""", RegexOption.IGNORE_CASE)
+    // Regex 3: Standalone image URL on its own line
+    val urlImgRegex = Regex("""^\s*(https?://\S+?\.(?:png|jpg|jpeg|webp)(?:\?\S*)?)\s*$""", RegexOption.IGNORE_CASE)
+
+    val lines = rawText.lines()
     for (line in lines) {
         val trimmed = line.trim()
-        if (trimmed.isBlank()) continue
+        if (trimmed.isEmpty()) continue
 
-        // Check if standalone image line
-        if (standaloneImgRegex.matches(trimmed)) {
-            extractedPhotos.add(trimmed)
+        // Extract photos
+        mdImgRegex.findAll(trimmed).forEach { match ->
+            extractedPhotos.add(match.groupValues[1])
+        }
+        htmlImgRegex.findAll(trimmed).forEach { match ->
+            extractedPhotos.add(match.groupValues[1])
+        }
+        val standaloneMatch = urlImgRegex.matchEntire(trimmed)
+        if (standaloneMatch != null) {
+            extractedPhotos.add(standaloneMatch.groupValues[1])
             continue
         }
 
-        // Section header (## Top Features, ### What's New)
-        if (trimmed.startsWith("#")) {
-            val headerText = trimmed.trimStart('#').trim().removePrefix("**").removeSuffix("**").trim()
-            if (headerText.isNotBlank()) {
-                nodes.add(ChangelogNode.Header(headerText))
-            }
-            continue
-        }
+        // Clean out images from text lines so they don't leave raw tags behind
+        val cleanLine = trimmed
+            .replace(mdImgRegex, "")
+            .replace(htmlImgRegex, "")
+            .trim()
 
-        // Bullet item
-        var content = trimmed
-        var isBullet = false
-        val bulletPrefixes = listOf("* ", "- ", "• ", "+ ")
-        for (prefix in bulletPrefixes) {
-            if (content.startsWith(prefix)) {
-                content = content.removePrefix(prefix).trim()
-                isBullet = true
-                break
+        if (cleanLine.isBlank()) continue
+
+        // Check for Headers (e.g. ## Features, ### Changelog)
+        if (cleanLine.startsWith("#")) {
+            val headerTitle = cleanLine.trimStart('#').trim()
+            if (headerTitle.isNotBlank()) {
+                nodes.add(ChangelogNode.Header(headerTitle))
+                continue
             }
         }
 
-        // Pattern 1: **Title:** Description
-        val boldMatch = Regex("""^\*\*(.*?)\*\*(.*)$""").find(content)
-        if (boldMatch != null) {
-            val title = boldMatch.groupValues[1].trim().removeSuffix(":").trim()
-            val desc = boldMatch.groupValues[2].trim().removePrefix(":").removePrefix("-").trim()
-            nodes.add(ChangelogNode.FeatureBullet(title.ifBlank { null }, desc.ifBlank { content }))
+        // Bullet points
+        val isBullet = cleanLine.startsWith("* ") || cleanLine.startsWith("- ") || cleanLine.startsWith("• ")
+        val content = if (isBullet) cleanLine.substring(2).trim() else cleanLine
+
+        // Pattern 1: **Title:** Description or **Title**: Description
+        val boldColonMatch = Regex("""^\*\*(.+?)\*\*:\s*(.*)$""").matchEntire(content)
+            ?: Regex("""^\*\*(.+?):\*\*\s*(.*)$""").matchEntire(content)
+
+        if (boldColonMatch != null) {
+            val title = boldColonMatch.groupValues[1].trim()
+            val desc = boldColonMatch.groupValues[2].trim()
+            nodes.add(ChangelogNode.FeatureBullet(title, desc))
             continue
         }
 
         // Pattern 2: Title: Description
-        val colonIdx = content.indexOf(':')
-        if (colonIdx in 2..45) {
+        val colonIdx = content.indexOf(": ")
+        if (colonIdx in 2..40) {
             val potentialTitle = content.substring(0, colonIdx).trim().removePrefix("**").removeSuffix("**").trim()
-            val potentialDesc = content.substring(colonIdx + 1).trim()
-            if (!potentialTitle.startsWith("http", ignoreCase = true) && potentialDesc.isNotBlank()) {
+            val potentialDesc = content.substring(colonIdx + 2).trim()
+            if (!potentialTitle.contains("http", ignoreCase = true) && potentialDesc.isNotBlank()) {
                 nodes.add(ChangelogNode.FeatureBullet(potentialTitle, potentialDesc))
                 continue
             }
@@ -207,9 +206,7 @@ fun parseReleaseChangelog(rawText: String): ParsedChangelog {
 }
 
 /**
- * Release Media Showcase for 1 or 2 photos:
- * - 1 Photo: Premium 16:9 hero preview card with frosted glass hairline border.
- * - 2 Photos: Emil Kowalski swipeable pager with fluid animated pill dot indicators.
+ * Release Media Showcase with Gold Hairline Borders.
  */
 @Composable
 private fun ReleasePhotoShowcase(
@@ -218,14 +215,21 @@ private fun ReleasePhotoShowcase(
 ) {
     if (photos.isEmpty()) return
 
+    val goldBorder = Brush.linearGradient(
+        listOf(
+            Color(0xFFFFE082).copy(alpha = 0.6f),
+            Color(0xFFFFC107).copy(alpha = 0.3f),
+            Color(0xFFFFE082).copy(alpha = 0.5f)
+        )
+    )
+
     if (photos.size == 1) {
-        // Single Hero Image Card
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(175.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .border(SettingsTokens.HairlineWidth, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp))
+                .border(0.75.dp, goldBorder, RoundedCornerShape(16.dp))
         ) {
             AppAsyncImage(
                 model = photos.first(),
@@ -235,7 +239,6 @@ private fun ReleasePhotoShowcase(
             )
         }
     } else {
-        // 2-Photo Horizontal Pager Carousel
         val pagerState = rememberPagerState(pageCount = { photos.size })
         Column(
             modifier = modifier.fillMaxWidth(),
@@ -252,7 +255,7 @@ private fun ReleasePhotoShowcase(
                         .fillMaxSize()
                         .padding(horizontal = 2.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .border(SettingsTokens.HairlineWidth, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp))
+                        .border(0.75.dp, goldBorder, RoundedCornerShape(16.dp))
                 ) {
                     AppAsyncImage(
                         model = photos[page],
@@ -265,7 +268,7 @@ private fun ReleasePhotoShowcase(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Animated dot indicator pills
+            // Animated dot indicator pills in gold
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -282,7 +285,7 @@ private fun ReleasePhotoShowcase(
                             .height(5.dp)
                             .width(dotWidth)
                             .clip(CircleShape)
-                            .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.28f))
+                            .background(if (isSelected) Color(0xFFFFD54F) else Color(0xFFFFD54F).copy(alpha = 0.28f))
                     )
                 }
             }
@@ -291,13 +294,18 @@ private fun ReleasePhotoShowcase(
 }
 
 /**
- * Modern Software Update Popup Dialog.
+ * MOVIE HUB — Premium Black & Gold Cinematic Software Update Popup.
  *
- * Designed in deep accordance with the 3 core principles:
- * - Taste: Luxury frosted glassmorphism card, subtle hairline border, no nested inner boxes, clean typography.
- * - Emil Kowalski: Fluid scrollable changelog with pinned bottom action dock over an upward gradient fade,
- *   organic spring physics on entry/exit, tactile press responses.
- * - Impeccable: Bold feature lead-ins, distinct section hierarchy, seamless 1-2 photo showcase, and high legibility.
+ * Designed with luxury aesthetics:
+ * - Obsidian deep black background with soft gold glow halo.
+ * - Rounded dialog with subtle multi-stop gold hairline border.
+ * - MOVIE HUB official logo badge at the top with ambient gold backlighting.
+ * - Heading: "A NEW EXPERIENCE AWAITS" in radiant gold typography.
+ * - Side-by-side installed vs available version comparison card.
+ * - Display release title and GitHub release notes.
+ * - Stylish gold download progress bar with real-time percentage and byte counters.
+ * - Clear cinematic buttons: DOWNLOAD UPDATE, LATER, INSTALL UPDATE.
+ * - Official branding: MOVIE HUB · Developer: AYUSH.
  */
 @Composable
 fun UpdateInfoDialog(
@@ -328,7 +336,6 @@ fun UpdateInfoDialog(
         } else null
     }
 
-    // Parsed changelog structure with photos and formatted bullet nodes
     val parsedChangelog = remember(release.changelog) {
         parseReleaseChangelog(release.changelog)
     }
@@ -379,14 +386,24 @@ fun UpdateInfoDialog(
     BackHandler(enabled = !release.isMandatory) { dismissWithAnim() }
 
     val animValue = dialogProgress.value
-    val scrimAlpha = if (reduceMotion) 0.65f else (0.65f * animValue).coerceIn(0f, 0.65f)
+    val scrimAlpha = if (reduceMotion) 0.80f else (0.80f * animValue).coerceIn(0f, 0.80f)
     val cardScale = if (reduceMotion) 1f else 0.94f + 0.06f * animValue
     val cardTranslationY = if (reduceMotion) 0f else (1f - animValue) * 30f
     val cardAlpha = if (reduceMotion) 1f else animValue.coerceIn(0f, 1f)
 
-    val cardShape = RoundedCornerShape(28.dp)
-    val cardFill = if (isAmoled) Color.Black.copy(alpha = 0.92f) else Color(0xFF0F1219).copy(alpha = 0.85f)
-    val fallbackColor = if (isAmoled) Color.Black.copy(alpha = 0.96f) else Color(0xFF0F1219).copy(alpha = 0.96f)
+    val cardShape = RoundedCornerShape(26.dp)
+    val cardFill = if (isAmoled) Color.Black.copy(alpha = 0.96f) else Color(0xFF090A0E).copy(alpha = 0.94f)
+    val fallbackColor = if (isAmoled) Color.Black else Color(0xFF090A0E)
+
+    // Cinematic Gold Border Brush
+    val goldBorderBrush = Brush.verticalGradient(
+        listOf(
+            Color(0xFFFFDF7A).copy(alpha = 0.75f),
+            Color(0xFFFFC107).copy(alpha = 0.40f),
+            Color(0xFF8D6E12).copy(alpha = 0.20f),
+            Color(0xFFFFD54F).copy(alpha = 0.60f)
+        )
+    )
 
     val isDownloading = downloadState is ApkDownloadState.Downloading
     val isReadyToInstall = downloadState is ApkDownloadState.ReadyToInstall
@@ -406,11 +423,31 @@ fun UpdateInfoDialog(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Scrim backdrop
+        // Deep Cinema Scrim backdrop
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = scrimAlpha))
+        )
+
+        // Soft Gold Ambient Radial Glow behind the Card
+        Box(
+            modifier = Modifier
+                .size(380.dp)
+                .graphicsLayer {
+                    alpha = cardAlpha * 0.7f
+                    scaleX = cardScale
+                    scaleY = cardScale
+                }
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFC107).copy(alpha = 0.16f),
+                            Color(0xFFFFB300).copy(alpha = 0.06f),
+                            Color.Transparent
+                        )
+                    )
+                )
         )
 
         // Modal Dialog Card
@@ -422,9 +459,9 @@ fun UpdateInfoDialog(
                     translationY = cardTranslationY
                     alpha = cardAlpha
                 }
-                .widthIn(max = 400.dp)
+                .widthIn(max = 410.dp)
                 .fillMaxWidth()
-                .fillMaxHeight(0.80f)
+                .fillMaxHeight(0.84f)
                 .padding(horizontal = 20.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -444,8 +481,8 @@ fun UpdateInfoDialog(
                     }
                 )
                 .border(
-                    width = 0.5.dp,
-                    color = Color.White.copy(alpha = 0.16f),
+                    width = 1.dp,
+                    brush = goldBorderBrush,
                     shape = cardShape
                 )
         ) {
@@ -457,53 +494,204 @@ fun UpdateInfoDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                        .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // MOVIE HUB Official Logo Emblem Tile with Gold Aura
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFF282215),
+                                        Color(0xFF13110C)
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFFFFDF7A),
+                                        Color(0xFFFFC107).copy(alpha = 0.5f),
+                                        Color(0xFFFFE082)
+                                    )
+                                ),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_moviehub_logo),
+                            contentDescription = "MOVIE HUB Logo",
+                            modifier = Modifier.size(34.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Heading: "A NEW EXPERIENCE AWAITS" in radiant gold gradient
                     Text(
-                        text = "Software Update",
+                        text = "A NEW EXPERIENCE AWAITS",
                         style = TextStyle(
                             fontFamily = AppFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            lineHeight = 24.sp,
-                            color = SettingsTokens.TextWhite96
+                            fontSize = 17.sp,
+                            lineHeight = 22.sp,
+                            letterSpacing = 0.12.em,
+                            brush = Brush.linearGradient(
+                                listOf(
+                                    Color(0xFFFFF7DB),
+                                    Color(0xFFFFD54F),
+                                    Color(0xFFFFB300)
+                                )
+                            )
                         ),
                         textAlign = TextAlign.Center
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    val subtitleText = buildString {
-                        if (isNewerUpdate) {
-                            append("MOVIE HUB ${release.versionName} is available to download.")
-                        } else {
-                            append("MOVIE HUB ${release.tagName}")
-                        }
-                        if (formattedSize != null) {
-                            append(" · $formattedSize")
+                    // Subtitle / Developer Attribution
+                    Text(
+                        text = "MOVIE HUB OFFICIAL UPDATE · DEVELOPER: AYUSH",
+                        style = TextStyle(
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 10.5.sp,
+                            letterSpacing = 0.10.em,
+                            color = Color(0xFFFFD54F).copy(alpha = 0.75f)
+                        ),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Version Comparison Module: Installed vs Available
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF12131A))
+                            .border(
+                                width = 0.5.dp,
+                                color = Color(0xFFFFD54F).copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Current Installed Version
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text(
+                                    text = "INSTALLED",
+                                    style = TextStyle(
+                                        fontFamily = AppFontFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 9.5.sp,
+                                        letterSpacing = 0.08.em,
+                                        color = Color.White.copy(alpha = 0.45f)
+                                    )
+                                )
+                                Text(
+                                    text = "v$currentVersion",
+                                    style = TextStyle(
+                                        fontFamily = AppFontFamily,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 13.5.sp,
+                                        color = Color.White.copy(alpha = 0.85f)
+                                    )
+                                )
+                            }
+
+                            // Directional Golden Arrow
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF262012))
+                                    .border(0.5.dp, Color(0xFFFFD54F).copy(alpha = 0.40f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "➔",
+                                    style = TextStyle(
+                                        fontSize = 12.sp,
+                                        color = Color(0xFFFFD54F)
+                                    )
+                                )
+                            }
+
+                            // Available Remote Version
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "AVAILABLE",
+                                    style = TextStyle(
+                                        fontFamily = AppFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.5.sp,
+                                        letterSpacing = 0.08.em,
+                                        color = Color(0xFFFFD54F)
+                                    )
+                                )
+                                Text(
+                                    text = "v${release.versionName}",
+                                    style = TextStyle(
+                                        fontFamily = AppFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = Color(0xFFFFF2B2)
+                                    )
+                                )
+                            }
                         }
                     }
 
+                    // Metadata Subtext (Size & Date)
+                    val metadataLine = buildString {
+                        if (formattedSize != null) {
+                            append(formattedSize)
+                            append(" · ")
+                        }
+                        append("Released ")
+                        append(release.publishedAt)
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     Text(
-                        text = subtitleText,
+                        text = metadataLine,
                         style = TextStyle(
                             fontFamily = AppFontFamily,
                             fontWeight = FontWeight.Normal,
-                            fontSize = 13.sp,
-                            lineHeight = 17.sp,
-                            color = SettingsTokens.TextWhite54
+                            fontSize = 11.5.sp,
+                            color = Color.White.copy(alpha = 0.45f)
                         ),
                         textAlign = TextAlign.Center
                     )
                 }
 
-                // Subtle Hairline Divider
+                // Subtle Gold Divider
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(SettingsTokens.HairlineWidth)
-                        .background(Color.White.copy(alpha = 0.10f))
+                        .height(0.5.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color(0xFFFFD54F).copy(alpha = 0.30f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 )
 
                 // Scrollable Changelog Body
@@ -512,15 +700,54 @@ fun UpdateInfoDialog(
                         .fillMaxWidth()
                         .weight(1f)
                         .verticalScroll(scrollState)
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .padding(horizontal = 24.dp, vertical = 14.dp)
                 ) {
-                    // Release Photos Showcase (1 or 2 images)
+                    // Release Photos Showcase (if present)
                     if (parsedChangelog.photos.isNotEmpty()) {
                         ReleasePhotoShowcase(
                             photos = parsedChangelog.photos,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
                     }
+
+                    // Release Title Block
+                    if (release.releaseTitle.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .height(14.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFFD54F))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = release.releaseTitle,
+                                style = TextStyle(
+                                    fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = Color.White
+                                )
+                            )
+                        }
+                    }
+
+                    // "WHAT'S NEW" section header
+                    Text(
+                        text = "WHAT'S NEW",
+                        style = TextStyle(
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 0.12.em,
+                            color = Color(0xFFFFD54F).copy(alpha = 0.85f)
+                        ),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
 
                     // Structured Changelog Items
                     parsedChangelog.nodes.forEach { node ->
@@ -531,36 +758,35 @@ fun UpdateInfoDialog(
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 16.5.sp,
-                                        lineHeight = 21.sp,
-                                        color = SettingsTokens.TextWhite96
+                                        fontSize = 14.5.sp,
+                                        lineHeight = 19.sp,
+                                        color = Color(0xFFFFF2B2)
                                     ),
-                                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
                                 )
                             }
                             is ChangelogNode.FeatureBullet -> {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
+                                        .padding(vertical = 3.5.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     Text(
-                                        text = "•",
+                                        text = "◆",
                                         style = TextStyle(
                                             fontFamily = AppFontFamily,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 14.sp,
-                                            color = Color.White.copy(alpha = 0.65f)
+                                            fontSize = 8.sp,
+                                            color = Color(0xFFFFD54F).copy(alpha = 0.85f)
                                         ),
-                                        modifier = Modifier.padding(end = 8.dp, top = 1.dp)
+                                        modifier = Modifier.padding(end = 8.dp, top = 4.dp)
                                     )
                                     val annotated = buildAnnotatedString {
                                         if (!node.title.isNullOrBlank()) {
                                             withStyle(
                                                 SpanStyle(
                                                     fontWeight = FontWeight.SemiBold,
-                                                    color = SettingsTokens.TextWhite96
+                                                    color = Color.White
                                                 )
                                             ) {
                                                 append(node.title)
@@ -570,7 +796,7 @@ fun UpdateInfoDialog(
                                         withStyle(
                                             SpanStyle(
                                                 fontWeight = FontWeight.Normal,
-                                                color = SettingsTokens.TextWhite72
+                                                color = Color.White.copy(alpha = 0.72f)
                                             )
                                         ) {
                                             append(node.description)
@@ -580,8 +806,8 @@ fun UpdateInfoDialog(
                                         text = annotated,
                                         style = TextStyle(
                                             fontFamily = AppFontFamily,
-                                            fontSize = 13.5.sp,
-                                            lineHeight = 19.sp
+                                            fontSize = 13.sp,
+                                            lineHeight = 18.5.sp
                                         )
                                     )
                                 }
@@ -592,22 +818,22 @@ fun UpdateInfoDialog(
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
                                         fontWeight = FontWeight.Normal,
-                                        fontSize = 13.5.sp,
-                                        lineHeight = 19.sp,
-                                        color = SettingsTokens.TextWhite72
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.5.sp,
+                                        color = Color.White.copy(alpha = 0.72f)
                                     ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
+                                    modifier = Modifier.padding(vertical = 3.5.dp)
                                 )
                             }
                         }
                     }
 
-                    // Bottom padding spacer so content scrolls completely clear of the floating pinned action dock
-                    Spacer(modifier = Modifier.height(115.dp))
+                    // Bottom padding spacer to clear the pinned action dock
+                    Spacer(modifier = Modifier.height(130.dp))
                 }
             }
 
-            // Pinned Bottom Action Dock over Upward Gradient Mask
+            // Pinned Bottom Action Dock over Upward Black Gradient Mask
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -622,56 +848,107 @@ fun UpdateInfoDialog(
                             )
                         )
                     )
-                    .padding(horizontal = 24.dp, vertical = 18.dp)
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Download Progress View (when Downloading)
+                    // Stylish Download Progress Bar (when Downloading)
                     if (downloadState is ApkDownloadState.Downloading) {
                         val percent = (downloadState.progressFraction * 100).toInt()
                         val curMb = downloadState.downloadedBytes / (1024.0 * 1024.0)
                         val totMb = downloadState.totalBytes / (1024.0 * 1024.0)
 
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Downloading APK: $percent%",
-                                style = TextStyle(
-                                    fontFamily = AppFontFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = SettingsTokens.TextWhite82
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF151410))
+                                .border(
+                                    width = 0.5.dp,
+                                    color = Color(0xFFFFD54F).copy(alpha = 0.25f),
+                                    shape = RoundedCornerShape(12.dp)
                                 )
-                            )
-                            if (downloadState.totalBytes > 0L) {
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFFFD54F))
+                                    )
+                                    Text(
+                                        text = "DOWNLOADING PATCH",
+                                        style = TextStyle(
+                                            fontFamily = AppFontFamily,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 11.sp,
+                                            letterSpacing = 0.08.em,
+                                            color = Color(0xFFFFD54F)
+                                        )
+                                    )
+                                }
                                 Text(
-                                    text = String.format(Locale.US, "%.1f / %.1f MB", curMb, totMb),
+                                    text = "$percent%",
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
-                                        fontWeight = FontWeight.Normal,
-                                        fontSize = 11.sp,
-                                        color = SettingsTokens.TextWhite54
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFFFF2B2)
                                     )
                                 )
                             }
-                        }
 
-                        LinearProgressIndicator(
-                            progress = { downloadState.progressFraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(CircleShape),
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.14f)
-                        )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Custom Gold Gradient Progress Bar
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF262319))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction = downloadState.progressFraction.coerceIn(0.01f, 1f))
+                                        .fillMaxHeight()
+                                        .clip(CircleShape)
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(
+                                                    Color(0xFFFFF2B2),
+                                                    Color(0xFFFFD54F),
+                                                    Color(0xFFFF9800)
+                                                )
+                                            )
+                                        )
+                                )
+                            }
+
+                            if (downloadState.totalBytes > 0L) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = String.format(Locale.US, "%.1f MB / %.1f MB", curMb, totMb),
+                                    style = TextStyle(
+                                        fontFamily = AppFontFamily,
+                                        fontSize = 10.5.sp,
+                                        color = Color.White.copy(alpha = 0.50f)
+                                    ),
+                                    modifier = Modifier.align(Alignment.End)
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -690,13 +967,35 @@ fun UpdateInfoDialog(
                         )
                     }
 
-                    // Primary Action Button: 48dp Solid White Pill
+                    // Primary Action Button: Metallic Gold Gradient Pill
+                    val primaryButtonBrush = if (isDownloading) {
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color(0xFFFFD54F).copy(alpha = 0.45f),
+                                Color(0xFFFFB300).copy(alpha = 0.45f)
+                            )
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color(0xFFFFE57F),
+                                Color(0xFFFFC107),
+                                Color(0xFFFFA000)
+                            )
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                             .clip(CircleShape)
-                            .background(if (isDownloading) Color.White.copy(alpha = 0.50f) else Color.White)
+                            .background(primaryButtonBrush)
+                            .border(
+                                width = 0.5.dp,
+                                color = Color(0xFFFFF2B2).copy(alpha = 0.60f),
+                                shape = CircleShape
+                            )
                             .settingsPressable(
                                 enabled = !isDownloading,
                                 onClick = {
@@ -718,72 +1017,77 @@ fun UpdateInfoDialog(
                             if (isDownloading) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
-                                    color = SettingsTokens.TextDark,
+                                    color = Color(0xFF141005),
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "Downloading Update...",
+                                    text = "DOWNLOADING UPDATE...",
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.5.sp,
-                                        color = SettingsTokens.TextDark
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp,
+                                        letterSpacing = 0.08.em,
+                                        color = Color(0xFF141005)
                                     )
                                 )
                             } else {
                                 val primaryText = when {
-                                    isReadyToInstall -> "Install Update"
-                                    downloadState is ApkDownloadState.Error -> "Retry Download"
-                                    release.apkDownloadUrl != null && isNewerUpdate -> "Download Now"
-                                    release.apkDownloadUrl != null -> "Download APK"
-                                    else -> "View Release Page"
+                                    isReadyToInstall -> "INSTALL UPDATE"
+                                    downloadState is ApkDownloadState.Error -> "RETRY DOWNLOAD"
+                                    release.apkDownloadUrl != null -> "DOWNLOAD UPDATE"
+                                    else -> "VIEW RELEASE PAGE"
                                 }
                                 Text(
                                     text = primaryText,
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.5.sp,
-                                        color = SettingsTokens.TextDark
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp,
+                                        letterSpacing = 0.08.em,
+                                        color = Color(0xFF141005)
                                     )
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Secondary Quiet Text Button: Remind Me Later
+                    // Secondary Action Button: "LATER" (Translucent Gold Pill)
                     if (!release.isMandatory) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(CircleShape)
+                                    .border(
+                                        width = 0.5.dp,
+                                        color = Color(0xFFFFD54F).copy(alpha = 0.35f),
+                                        shape = CircleShape
+                                    )
+                                    .background(Color(0xFF1A1710))
                                     .settingsPressable(onClick = dismissWithAnim)
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    .padding(horizontal = 24.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (isNewerUpdate) "Remind Me Later" else "Close",
+                                    text = "LATER",
                                     style = TextStyle(
                                         fontFamily = AppFontFamily,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 13.5.sp,
-                                        color = SettingsTokens.TextWhite72
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.5.sp,
+                                        letterSpacing = 0.08.em,
+                                        color = Color(0xFFFFD54F)
                                     )
                                 )
                             }
 
                             if (isNewerUpdate) {
-                                Text(
-                                    text = "·",
-                                    style = TextStyle(color = SettingsTokens.TextWhite42, fontSize = 13.sp),
-                                    modifier = Modifier.padding(horizontal = 2.dp)
-                                )
+                                Spacer(modifier = Modifier.width(12.dp))
 
                                 Box(
                                     modifier = Modifier
@@ -794,16 +1098,16 @@ fun UpdateInfoDialog(
                                                 dismissWithAnim()
                                             }
                                         )
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "Skip Version",
+                                        text = "Skip version",
                                         style = TextStyle(
                                             fontFamily = AppFontFamily,
                                             fontWeight = FontWeight.Normal,
-                                            fontSize = 12.5.sp,
-                                            color = SettingsTokens.TextWhite45
+                                            fontSize = 11.5.sp,
+                                            color = Color.White.copy(alpha = 0.40f)
                                         )
                                     )
                                 }
@@ -816,8 +1120,8 @@ fun UpdateInfoDialog(
                             style = TextStyle(
                                 fontFamily = AppFontFamily,
                                 fontWeight = FontWeight.Normal,
-                                fontSize = 11.5.sp,
-                                color = SettingsTokens.TextWhite45
+                                fontSize = 11.sp,
+                                color = Color(0xFFFFD54F).copy(alpha = 0.65f)
                             ),
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)

@@ -85,7 +85,16 @@ fun HomeUpdateBanner(
                                     .background(Color.White.copy(alpha = 0.07f))
                             }
                         )
-                        .border(0.5.dp, GlassDefaults.BorderBrush, ShapeFull)
+                        .border(
+                            width = 0.5.dp,
+                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(
+                                    Color(0xFFFFD54F).copy(alpha = 0.50f),
+                                    Color(0xFFFFB300).copy(alpha = 0.25f)
+                                )
+                            ),
+                            shape = ShapeFull
+                        )
                         .pressable(
                             scaleDown = 0.98f,
                             onClick = {
@@ -99,7 +108,7 @@ fun HomeUpdateBanner(
                     Icon(
                         imageVector = Icons.Outlined.SystemUpdateAlt,
                         contentDescription = "Update available",
-                        tint = Color.White.copy(alpha = 0.90f),
+                        tint = Color(0xFFFFD54F),
                         modifier = Modifier.size(16.dp)
                     )
                     Text(

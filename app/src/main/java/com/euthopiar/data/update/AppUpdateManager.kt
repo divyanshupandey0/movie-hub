@@ -108,6 +108,14 @@ fun isRemoteUpdateAvailable(
     remoteVersionName: String
 ): Boolean {
     if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return false
+
+    // 1. Numerical comparison on versionCode if both are valid positive integers
+    if (remoteVersionCode > 0 && currentVersionCode > 0) {
+        if (remoteVersionCode > currentVersionCode) return true
+        if (remoteVersionCode < currentVersionCode) return false
+    }
+
+    // 2. Fallback: semantic comparison on versionName
     return isRemoteVersionNewer(currentVersionName, remoteVersionName)
 }
 
@@ -163,9 +171,9 @@ class AppUpdateManager private constructor(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.1.0"
+            pInfo.versionName ?: "1.0.1"
         } catch (_: Exception) {
-            "1.1.0"
+            "1.0.1"
         }
     }
 
@@ -179,7 +187,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                 pInfo.versionCode
             }
         } catch (_: Exception) {
-            11
+            101
         }
     }
 
@@ -268,15 +276,31 @@ class AppUpdateManager private constructor(private val context: Context) {
 
         val assets = json.optJSONArray("assets")
         if (assets != null) {
+            // Priority 1: Official branded MOVIE-HUB-*.apk
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val assetName = asset.optString("name", "")
-                if (assetName.endsWith(".apk", ignoreCase = true)) {
+                if (assetName.startsWith("MOVIE-HUB", ignoreCase = true) && assetName.endsWith(".apk", ignoreCase = true)) {
                     val url = asset.optString("browser_download_url", null)
                     if (url != null && (url.contains("github.com") || url.startsWith("https://"))) {
                         apkDownloadUrl = url
                         apkSizeBytes = asset.optLong("size", 0L)
                         break
+                    }
+                }
+            }
+            // Priority 2: Fallback to any valid .apk asset
+            if (apkDownloadUrl == null) {
+                for (i in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(i)
+                    val assetName = asset.optString("name", "")
+                    if (assetName.endsWith(".apk", ignoreCase = true)) {
+                        val url = asset.optString("browser_download_url", null)
+                        if (url != null && (url.contains("github.com") || url.startsWith("https://"))) {
+                            apkDownloadUrl = url
+                            apkSizeBytes = asset.optLong("size", 0L)
+                            break
+                        }
                     }
                 }
             }
@@ -429,11 +453,11 @@ class AppUpdateManager private constructor(private val context: Context) {
                     tempFile.delete()
                 }
 
-                // Verify APK package archive validity via Android PackageManager
-                val packageArchiveInfo = context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
-                if (packageArchiveInfo == null) {
+                // Pre-installation APK package, signature and version compatibility audit
+                val compatibilityError = verifyApkCompatibility(apkFile)
+                if (compatibilityError != null) {
                     apkFile.delete()
-                    _downloadState.value = ApkDownloadState.Error("Downloaded file is not a valid Android APK")
+                    _downloadState.value = ApkDownloadState.Error(compatibilityError)
                     return@launch
                 }
 
@@ -472,6 +496,56 @@ class AppUpdateManager private constructor(private val context: Context) {
         } else {
             _downloadState.value = ApkDownloadState.Idle
         }
+    }
+
+    fun verifyApkCompatibility(apkFile: File): String? {
+        val pm = context.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            android.content.pm.PackageManager.GET_SIGNATURES
+        }
+        val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, flags)
+            ?: return "Downloaded file is corrupted or not a valid Android APK."
+        if (archiveInfo.packageName != context.packageName) {
+            return "Package name mismatch: APK is '${archiveInfo.packageName}', but installed app is '${context.packageName}'."
+        }
+        val archiveVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            archiveInfo.longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            archiveInfo.versionCode
+        }
+        val currentCode = getCurrentVersionCode()
+        if (archiveVersionCode > 0 && currentCode > 0 && archiveVersionCode < currentCode) {
+            return "Cannot downgrade: Downloaded version ($archiveVersionCode) is older than installed version ($currentCode)."
+        }
+        val installedSignatures = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+                    .signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() }
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNATURES)
+                    .signatures?.map { it.toByteArray().contentHashCode() }
+            }
+        } catch (_: Exception) { null }
+
+        val archiveSignatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            archiveInfo.signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() }
+        } else {
+            @Suppress("DEPRECATION")
+            archiveInfo.signatures?.map { it.toByteArray().contentHashCode() }
+        }
+
+        if (!installedSignatures.isNullOrEmpty() && !archiveSignatures.isNullOrEmpty()) {
+            val hasMatchingCert = installedSignatures.any { it in archiveSignatures }
+            if (!hasMatchingCert) {
+                return "Package signature conflict: APK is signed with a different key than your installed app."
+            }
+        }
+        return null
     }
 
     private fun calculateSha256(file: File): String {

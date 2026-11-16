@@ -349,8 +349,11 @@ fun PlayerGestureOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(screenWidthPx, screenHeightPx, isGesturesPaused, isScreenLocked) {
+            .pointerInput(isGesturesPaused, isScreenLocked) {
                 if (isGesturesPaused) return@pointerInput
+
+                val widthPx = size.width.toFloat()
+                val heightPx = size.height.toFloat()
 
                 if (isScreenLocked) {
                     awaitEachGesture {
@@ -370,13 +373,13 @@ fun PlayerGestureOverlay(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val startPos = down.position
-                    val edgeGuardPx = with(density) { 24.dp.toPx() }
-                    if (startPos.x < edgeGuardPx || startPos.x > (screenWidthPx - edgeGuardPx)) {
+                    val edgeGuardPx = with(density) { 8.dp.toPx() }
+                    if (startPos.x < edgeGuardPx || startPos.x > (widthPx - edgeGuardPx)) {
                         return@awaitEachGesture
                     }
 
-                    val isLeftThird = startPos.x < (screenWidthPx / 3f)
-                    val isRightThird = startPos.x > (screenWidthPx * 2f / 3f)
+                    val isLeftThird = startPos.x < (widthPx / 3f)
+                    val isRightThird = startPos.x > (widthPx * 2f / 3f)
                     val isBrightnessDragZone = isLeftThird
                     val isVolumeDragZone = isRightThird
 
@@ -389,7 +392,7 @@ fun PlayerGestureOverlay(
                     var holdJob: Job? = null
                     if (!currentControlsVisible) {
                         holdJob = scope.launch {
-                            delay(300)
+                            delay(500L)
                             if (!isDragging && !isPinchActive) {
                                 isHold2xActive = true
                                 try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
@@ -518,7 +521,7 @@ fun PlayerGestureOverlay(
                                         lastTapOffset = change.position
                                         pendingSingleTapJob?.cancel()
                                         pendingSingleTapJob = scope.launch {
-                                            delay(300L)
+                                            delay(180L)
                                             currentOnSingleTap()
                                         }
                                     }

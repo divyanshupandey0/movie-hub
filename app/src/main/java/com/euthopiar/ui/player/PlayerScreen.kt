@@ -480,6 +480,18 @@ fun PlayerScreen(
                         this.player = exoPlayer
                         useController = false
                         subtitleView?.visibility = android.view.View.GONE
+                        isClickable = false
+                        isFocusable = false
+                        val gd = android.view.GestureDetector(ctx, object : android.view.GestureDetector.SimpleOnGestureListener() {
+                            override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
+                                viewModel.toggleControls()
+                                return true
+                            }
+                        })
+                        setOnTouchListener { _, event ->
+                            gd.onTouchEvent(event)
+                            false // Do not consume: ensures Compose gesture overlay receives all touch events!
+                        }
                         resizeMode = when (uiState.aspectRatioMode) {
                             AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                             AspectRatioMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FIT
