@@ -1,8 +1,11 @@
 name: MOVIE HUB Staging CI
 
 on:
+  workflow_dispatch:
+
   push:
     branches: [ develop, main ]
+
   pull_request:
     branches: [ develop, main ]
 
