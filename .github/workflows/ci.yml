@@ -27,8 +27,48 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      - name: Verify and Restore Signing Keystore
+        env:
+          MOVIEHUB_KEYSTORE_BASE64: ${{ secrets.MOVIEHUB_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$MOVIEHUB_KEYSTORE_BASE64" ]; then
+            echo "::error::Required secret MOVIEHUB_KEYSTORE_BASE64 is missing or empty."
+            exit 1
+          fi
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Required secret KEYSTORE_PASSWORD is missing or empty."
+            exit 1
+          fi
+          if [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Required secret KEY_ALIAS is missing or empty."
+            exit 1
+          fi
+          if [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Required secret KEY_PASSWORD is missing or empty."
+            exit 1
+          fi
+
+          mkdir -p keystore
+          echo "$MOVIEHUB_KEYSTORE_BASE64" | base64 -d > keystore/moviehub-debug.keystore
+
+          if [ ! -s keystore/moviehub-debug.keystore ]; then
+            echo "::error::Failed to decode keystore file or file is empty at keystore/moviehub-debug.keystore."
+            exit 1
+          fi
+
       - name: Assemble Debug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Clean up Signing Keystore
+        if: always()
+        run: rm -f keystore/moviehub-debug.keystore
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
