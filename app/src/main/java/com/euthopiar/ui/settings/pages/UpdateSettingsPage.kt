@@ -20,6 +20,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.euthopiar.data.ota.OtaConfigManager
+import com.euthopiar.data.ota.OtaSyncState
 import com.euthopiar.data.preferences.PreferencesRepository
 import com.euthopiar.data.update.AppUpdateConfig
 import com.euthopiar.data.update.AppUpdateManager
@@ -66,6 +68,25 @@ fun UpdateSettingsPage(
             } catch (_: Exception) {
                 "Recent"
             }
+        }
+    }
+
+    val otaManager = remember(context) { OtaConfigManager.getInstance(context) }
+    val otaConfig by otaManager.config.collectAsState()
+    val otaSyncState by otaManager.syncState.collectAsState()
+    val isOtaSyncing = otaSyncState is OtaSyncState.Syncing
+
+    val formattedOtaLastSync = remember(otaSyncState) {
+        when (val state = otaSyncState) {
+            is OtaSyncState.Success -> {
+                try {
+                    val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                    sdf.format(Date(state.lastSyncTimestamp))
+                } catch (_: Exception) {
+                    "Just now"
+                }
+            }
+            else -> "Cached"
         }
     }
 
@@ -355,7 +376,84 @@ fun UpdateSettingsPage(
             )
         }
 
-        // Section 3: Source & Releases
+        // Section 3: Over-The-Air (OTA) Remote Configuration
+        OpenSettingsSectionHeader(title = "Over-The-Air (OTA) Configuration")
+
+        val otaStatusText = when (otaSyncState) {
+            is OtaSyncState.Syncing -> "Syncing remote configuration..."
+            is OtaSyncState.Success -> "Configuration active & up to date"
+            is OtaSyncState.Error -> "Offline / Sync error (using safe cache)"
+            is OtaSyncState.Idle -> "Active (Default Configuration)"
+        }
+
+        val otaStatusBadge = when (otaSyncState) {
+            is OtaSyncState.Syncing -> "Syncing"
+            is OtaSyncState.Success -> "Synced"
+            is OtaSyncState.Error -> "Cached"
+            is OtaSyncState.Idle -> "Active"
+        }
+
+        OpenSettingsRow(
+            title = "OTA Status",
+            subtitle = otaStatusText,
+            trailingContent = {
+                SettingsMetadataChip(
+                    text = otaStatusBadge,
+                    hazeState = hazeState
+                )
+            }
+        )
+
+        OpenSettingsRow(
+            title = "Current Configuration Version",
+            subtitle = "Config v${otaConfig.configVersion} (${otaConfig.configName}) · Target: MOVIE HUB v${currentVersion}",
+            trailingContent = {
+                SettingsMetadataChip(
+                    text = "v${otaConfig.configVersion}",
+                    hazeState = hazeState
+                )
+            }
+        )
+
+        OpenSettingsRow(
+            title = "Last Configuration Sync",
+            subtitle = formattedOtaLastSync,
+            trailingContent = {
+                SettingsPillButton(
+                    text = if (isOtaSyncing) "Syncing..." else "Sync Now",
+                    isLoading = isOtaSyncing,
+                    enabled = !isOtaSyncing,
+                    isSolidWhite = false,
+                    onClick = {
+                        scope.launch {
+                            otaManager.fetchRemoteConfig(forceManual = true)
+                        }
+                    },
+                    hazeState = hazeState
+                )
+            }
+        )
+
+        if (otaSyncState is OtaSyncState.Error) {
+            val errState = otaSyncState as OtaSyncState.Error
+            OpenSettingsRow(
+                title = "Sync Error State",
+                subtitle = "${errState.message} · Tap to retry",
+                onClick = {
+                    scope.launch {
+                        otaManager.fetchRemoteConfig(forceManual = true)
+                    }
+                },
+                trailingContent = {
+                    SettingsMetadataChip(
+                        text = "Retry",
+                        hazeState = hazeState
+                    )
+                }
+            )
+        }
+
+        // Section 4: Source & Releases
         OpenSettingsSectionHeader(title = "Source & Releases")
 
         OpenSettingsRow(

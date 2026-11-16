@@ -1,0 +1,70 @@
+{
+  "config_version": 1,
+  "config_name": "production-v1",
+  "minimum_supported_app_version": "1.1.0",
+  "updated_at": "2026-11-16T21:00:00Z",
+  "announcement": {
+    "enabled": true,
+    "id": "welcome_v112",
+    "title": "Welcome to MOVIE HUB",
+    "message": "Enjoy enhanced playback, intelligent Hindi audio auto-selection, and cloud synchronization.",
+    "action_label": "Discover",
+    "action_url": "",
+    "priority": "normal",
+    "dismissible": true
+  },
+  "maintenance": {
+    "enabled": false,
+    "title": "Scheduled Maintenance",
+    "message": "Routine server maintenance is in progress. Core playback features remain available.",
+    "is_blocking": false
+  },
+  "promotional_banner": {
+    "enabled": true,
+    "id": "spotlight_ramayana_2026",
+    "title": "FEATURED SPOTLIGHT",
+    "subtitle": "Ramayana: Rise of a Legend — Now Streaming in HD",
+    "banner_image_url": "",
+    "target_media_type": "movie",
+    "target_media_id": "ramayana"
+  },
+  "feature_flags": {
+    "enable_live_scraper_tester": true,
+    "enable_cloud_sync": true,
+    "enable_simkl_tracker": true,
+    "enable_trakt_tracker": true,
+    "enable_real_debrid": true,
+    "enable_all_debrid": true,
+    "enable_downloads": true,
+    "enable_playlists": true,
+    "enable_hindi_audio_auto_select": true,
+    "enable_promotional_banners": true,
+    "enable_announcements": true
+  },
+  "ui_text": {
+    "home_top_ten_title": "Top 10 Today",
+    "home_top_ten_subtitle": "Updated daily",
+    "home_featured_tag": "FEATURED SPOTLIGHT",
+    "explore_screen_title": "Find something.",
+    "library_empty_title": "Your library is empty",
+    "library_empty_subtitle": "Save movies and series to build your personal collection."
+  },
+  "content_display": {
+    "featured_media_type": "movie",
+    "featured_media_id": "ramayana",
+    "trending_cache_ttl_hours": 6,
+    "recommended_genres": [
+      "Action",
+      "Adventure",
+      "Fantasy",
+      "Sci-Fi",
+      "Drama",
+      "Thriller"
+    ]
+  },
+  "app_settings": {
+    "default_player_buffer_seconds": 30,
+    "default_auto_skip_intro": true,
+    "network_timeout_seconds": 15
+  }
+}

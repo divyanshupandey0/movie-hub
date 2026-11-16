@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             com.euthopiar.data.sync.MediaSyncManager.getInstance(applicationContext).syncAll()
             com.euthopiar.data.sync.supabase.SupabaseSyncManager.getInstance(applicationContext).syncAll()
+            com.euthopiar.data.ota.OtaConfigManager.getInstance(applicationContext).fetchRemoteConfig()
         }
         setContent {
             EuthopiarTheme {

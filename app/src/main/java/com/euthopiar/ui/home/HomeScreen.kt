@@ -86,7 +86,9 @@ import com.euthopiar.ui.longpress.toSheetItem
 import com.euthopiar.ui.components.TopHeaderBar
 import com.euthopiar.ui.components.TopTenRow
 import com.euthopiar.ui.components.HomeUpdateBanner
+import com.euthopiar.ui.components.OtaAnnouncementBanner
 import com.euthopiar.ui.components.UpdateInfoDialog
+import com.euthopiar.data.ota.OtaConfigManager
 import com.euthopiar.data.preferences.PreferencesRepository
 import com.euthopiar.data.update.AppUpdateManager
 import com.euthopiar.data.update.UpdateCheckState
@@ -131,11 +133,13 @@ fun HomeScreen(
     var addToPlaylistMedia by remember { mutableStateOf<MediaItem?>(null) }
     var watchlistSheetMedia by remember { mutableStateOf<MediaItem?>(null) }
 
-    // GitHub Release Update Management
+    // GitHub Release Update & OTA Configuration Management
     val updateManager = remember(context) { AppUpdateManager.getInstance(context) }
     val updateState by updateManager.updateState.collectAsState()
     val downloadState by updateManager.downloadState.collectAsState()
     val autoPopupShown by updateManager.autoPopupShownForSession.collectAsState()
+    val otaManager = remember(context) { OtaConfigManager.getInstance(context) }
+    val otaConfig by otaManager.config.collectAsState()
     val preferencesRepository = remember(context) { PreferencesRepository.getInstance(context) }
     val autoCheckUpdates by preferencesRepository.autoCheckUpdates.collectAsState(initial = true)
     val skippedUpdateVersion by preferencesRepository.skippedUpdateVersion.collectAsState(initial = "")
@@ -594,11 +598,11 @@ fun HomeScreen(
                                 if (topTenForTab.isNotEmpty()) {
                                     item(key = "universal_top_10", contentType = "top_10") {
                                         TopTenRow(
-                                            title = "Top 10 today",
+                                            title = otaConfig.getUiText("home_top_ten_title", "Top 10 today"),
                                             items = topTenForTab,
                                             style = top10Style,
                                             sectionLabelStyle = sectionLabelStyle,
-                                            subtitle = "Updated daily",
+                                            subtitle = otaConfig.getUiText("home_top_ten_subtitle", "Updated daily"),
                                             eyebrow = "THIS WEEK",
                                             onItemClick = { onMediaClick(it) },
                                             onItemLongClick = { quickActionItem = it },
@@ -714,6 +718,9 @@ fun HomeScreen(
                 hazeState = if (isPreviewActive) null else homeHazeState,
                 onOpenUpdatePopup = { _, _ -> showUpdateDialog = true },
                 onDismiss = { updateManager.dismissBannerForSession() }
+            )
+            OtaAnnouncementBanner(
+                hazeState = if (isPreviewActive) null else homeHazeState
             )
         }
 
