@@ -29,6 +29,6 @@ enum class ContentRegionPreset(
     val isIndianRegion: Boolean get() = regionCode == "IN" || countryGroup.startsWith("India")
 
     companion object {
-        fun fromId(id: String?): ContentRegionPreset = entries.firstOrNull { it.id == id } ?: GLOBAL
+        fun fromId(id: String?): ContentRegionPreset = entries.firstOrNull { it.id == id } ?: INDIA_ALL
     }
 }

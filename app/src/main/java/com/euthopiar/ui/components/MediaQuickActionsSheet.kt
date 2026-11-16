@@ -186,7 +186,7 @@ fun MediaQuickActionsSheet(
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_SUBJECT, item.title)
-                        putExtra(Intent.EXTRA_TEXT, "Watch ${item.title} on Euthopiar")
+                        putExtra(Intent.EXTRA_TEXT, "Watch ${item.title} on MOVIE HUB")
                     }
                     context.startActivity(Intent.createChooser(shareIntent, "Share ${item.title}"))
                 }

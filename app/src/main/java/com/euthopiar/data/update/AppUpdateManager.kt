@@ -29,6 +29,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 object AppUpdateConfig {
+    const val IS_UPDATE_SYSTEM_ENABLED = false
     const val GITHUB_OWNER = "TheARCreactorGUY"
     const val GITHUB_REPO = "Euthopiar"
     const val GITHUB_REPO_FALLBACK = "Euthopiar-"
@@ -69,6 +70,7 @@ sealed interface ApkDownloadState {
 }
 
 fun isRemoteVersionNewer(currentVersion: String, remoteTag: String): Boolean {
+    if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return false
     val cleanCurrent = currentVersion.trim().removePrefix("v").removePrefix("V")
     val cleanRemote = remoteTag.trim().removePrefix("v").removePrefix("V")
 
@@ -122,6 +124,10 @@ class AppUpdateManager private constructor(private val context: Context) {
     }
 
     suspend fun checkForUpdates(forceManual: Boolean = false) {
+        if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) {
+            _updateState.value = UpdateCheckState.UpToDate(getCurrentVersionName())
+            return
+        }
         _updateState.value = UpdateCheckState.Checking
         val currentVersion = getCurrentVersionName()
 
@@ -136,7 +142,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                     val request = Request.Builder()
                         .url(AppUpdateConfig.GITHUB_LATEST_API_URL)
                         .header("Accept", "application/vnd.github+json")
-                        .header("User-Agent", "Euthopiar-App")
+                        .header("User-Agent", "MOVIE-HUB-App")
                         .build()
 
                     client.newCall(request).execute().use { response ->
@@ -150,7 +156,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                             val fallbackReq = Request.Builder()
                                 .url(AppUpdateConfig.GITHUB_LATEST_FALLBACK_API_URL)
                                 .header("Accept", "application/vnd.github+json")
-                                .header("User-Agent", "Euthopiar-App")
+                                .header("User-Agent", "MOVIE-HUB-App")
                                 .build()
                             client.newCall(fallbackReq).execute().use { fbResponse ->
                                 if (fbResponse.isSuccessful) {
@@ -169,7 +175,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                     val request = Request.Builder()
                         .url(AppUpdateConfig.GITHUB_ALL_RELEASES_API_URL)
                         .header("Accept", "application/vnd.github+json")
-                        .header("User-Agent", "Euthopiar-App")
+                        .header("User-Agent", "MOVIE-HUB-App")
                         .build()
 
                     client.newCall(request).execute().use { response ->
@@ -191,7 +197,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                             val fallbackReq = Request.Builder()
                                 .url(AppUpdateConfig.GITHUB_ALL_FALLBACK_API_URL)
                                 .header("Accept", "application/vnd.github+json")
-                                .header("User-Agent", "Euthopiar-App")
+                                .header("User-Agent", "MOVIE-HUB-App")
                                 .build()
                             client.newCall(fallbackReq).execute().use { fbResponse ->
                                 if (fbResponse.isSuccessful) {
@@ -288,6 +294,7 @@ class AppUpdateManager private constructor(private val context: Context) {
     }
 
     fun downloadAndInstallUpdate(release: ReleaseInfo) {
+        if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return
         val downloadUrl = release.apkDownloadUrl
         if (downloadUrl.isNullOrBlank()) {
             openInBrowser(release.htmlUrl)
@@ -302,7 +309,7 @@ class AppUpdateManager private constructor(private val context: Context) {
                     updatesDir.mkdirs()
                 }
 
-                val apkFile = File(updatesDir, "Euthopiar-${release.versionName}.apk")
+                val apkFile = File(updatesDir, "MOVIE-HUB-${release.versionName}.apk")
                 if (apkFile.exists()) {
                     apkFile.delete()
                 }
@@ -364,6 +371,7 @@ class AppUpdateManager private constructor(private val context: Context) {
     }
 
     fun triggerInstallApk(apkFile: File, fallbackUrl: String) {
+        if (!AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return
         try {
             if (!apkFile.exists()) {
                 openInBrowser(fallbackUrl)

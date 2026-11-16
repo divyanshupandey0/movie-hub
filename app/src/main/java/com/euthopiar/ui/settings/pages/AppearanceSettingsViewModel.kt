@@ -15,10 +15,10 @@ class AppearanceSettingsViewModel(application: Application) : AndroidViewModel(a
 
     private val prefs = PreferencesRepository.getInstance(application)
 
-    private val _contentRegionPreset = kotlinx.coroutines.flow.MutableStateFlow(ContentRegionPreset.GLOBAL)
+    private val _contentRegionPreset = kotlinx.coroutines.flow.MutableStateFlow(ContentRegionPreset.INDIA_ALL)
     val contentRegionPreset: StateFlow<ContentRegionPreset> = _contentRegionPreset
 
-    private val _cardScaleMode = kotlinx.coroutines.flow.MutableStateFlow(CardScaleMode.FLAGSHIP)
+    private val _cardScaleMode = kotlinx.coroutines.flow.MutableStateFlow(CardScaleMode.COMPACT)
     val cardScaleMode: StateFlow<CardScaleMode> = _cardScaleMode
 
     private val _navbarStyle = kotlinx.coroutines.flow.MutableStateFlow(NavbarStyle.FLOATING)
@@ -30,7 +30,7 @@ class AppearanceSettingsViewModel(application: Application) : AndroidViewModel(a
     private val _sectionLabelStyle = kotlinx.coroutines.flow.MutableStateFlow(SectionLabelStyle.AccentBar)
     val sectionLabelStyle: StateFlow<SectionLabelStyle> = _sectionLabelStyle
 
-    private val _longPressStyle = kotlinx.coroutines.flow.MutableStateFlow(LongPressSheetStyle.HERO_PEEK)
+    private val _longPressStyle = kotlinx.coroutines.flow.MutableStateFlow(LongPressSheetStyle.GLASS_MENU)
     val longPressStyle: StateFlow<LongPressSheetStyle> = _longPressStyle
 
     private val _reduceMotion = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -107,12 +107,12 @@ class AppearanceSettingsViewModel(application: Application) : AndroidViewModel(a
     }
 
     fun resetDefaults() {
-        setContentRegionPreset(ContentRegionPreset.GLOBAL)
+        setContentRegionPreset(ContentRegionPreset.INDIA_ALL)
         setNavbarStyle(NavbarStyle.FLOATING)
-        setCardScaleMode(CardScaleMode.FLAGSHIP)
+        setCardScaleMode(CardScaleMode.COMPACT)
         setSectionLabelStyle(SectionLabelStyle.AccentBar)
         setTop10Style(Top10Style.PosterTinted)
-        setLongPressStyle(LongPressSheetStyle.HERO_PEEK)
+        setLongPressStyle(LongPressSheetStyle.GLASS_MENU)
         setReduceMotion(false)
         setAmoledMode(true)
     }

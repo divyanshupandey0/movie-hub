@@ -79,7 +79,7 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.euthopiar.data.preferences.SectionLabelStyle.AccentBar)
 
     val longPressStyle: StateFlow<com.euthopiar.ui.longpress.LongPressSheetStyle> = preferencesRepository.longPressStyle
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.euthopiar.ui.longpress.LongPressSheetStyle.HERO_PEEK)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.euthopiar.ui.longpress.LongPressSheetStyle.GLASS_MENU)
 
     val mediaReactions: StateFlow<Map<String, String>> = preferencesRepository.mediaReactions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())

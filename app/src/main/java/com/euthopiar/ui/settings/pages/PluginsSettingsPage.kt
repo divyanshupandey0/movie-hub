@@ -880,6 +880,57 @@ fun PluginsSettingsPage(
                                             }
                                         }
                                     )
+
+                                    val isPlavioInstalled = addonsUiState.addons.any {
+                                        it.manifestUrl == com.euthopiar.core.addons.AddonRepository.DEFAULT_PLAVIOHD_MANIFEST_URL ||
+                                        it.manifest?.id == "community.plaviohd" ||
+                                        it.displayTitle.equals("PlavioHD", ignoreCase = true)
+                                    }
+
+                                    if (!isPlavioInstalled) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(44.dp)
+                                                .clip(RoundedCornerShape(PluginsGlassTokens.RadiusPill))
+                                                .background(PluginsGlassTokens.GlassFill)
+                                                .border(
+                                                    PluginsGlassTokens.HairlineWidth,
+                                                    PluginsGlassTokens.HairlineBorder,
+                                                    RoundedCornerShape(PluginsGlassTokens.RadiusPill)
+                                                )
+                                                .pluginsPressable(scaleDown = 0.98f) {
+                                                    try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    statusDialogState = StatusDialogState.Installing
+                                                    viewModel.registerPlavioHd { success, msg ->
+                                                        statusDialogState = if (success) {
+                                                            StatusDialogState.Success(msg ?: "PlavioHD")
+                                                        } else {
+                                                            StatusDialogState.Error(msg ?: "Failed to install PlavioHD")
+                                                        }
+                                                    }
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.AddCircleOutline,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = "Install PlavioHD (Direct HTTPS Streams)",
+                                                    color = Color.White,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
 

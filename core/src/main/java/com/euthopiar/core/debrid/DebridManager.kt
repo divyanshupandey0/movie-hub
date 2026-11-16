@@ -89,7 +89,7 @@ class DebridManager(
                         resolutionLabel = resolvedLabel,
                         quality = resolvedQuality,
                         isM3u8 = resp.download.contains(".m3u8"),
-                        headers = mapOf("User-Agent" to "Euthopiar/1.0")
+                        headers = mapOf("User-Agent" to "MOVIE-HUB/1.0")
                     )
                 }
             }

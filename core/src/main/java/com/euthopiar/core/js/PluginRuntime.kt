@@ -77,7 +77,8 @@ object PluginRuntime {
                     if (repoId.isNotBlank()) registerRepoJob(repoId, job)
                 }
                 withTimeout(PLUGIN_TIMEOUT_MS) {
-                    executePluginInternal(
+                    android.util.Log.d("MovieHubStreaming", "PluginRuntime.executePlugin: scraperId=$scraperId, tmdbId=$tmdbId, imdbId=$imdbId, mediaType=$mediaType, S=$season, E=$episode, title=$title, year=$year")
+                    val res = executePluginInternal(
                         code = code,
                         tmdbId = tmdbId,
                         mediaType = mediaType,
@@ -101,6 +102,8 @@ object PluginRuntime {
                         englishTitle = englishTitle,
                         seasonSpecificTitle = seasonSpecificTitle
                     )
+                    android.util.Log.d("MovieHubStreaming", "PluginRuntime [$scraperId] returned ${res.size} stream items")
+                    res
                 }
             }
         }
@@ -349,8 +352,11 @@ object PluginRuntime {
                         rawUrl = "magnet:?xt=urn:btih:$infoHash"
                     }
 
-                    // Drop item ONLY if both URL and infoHash are missing
+                    // Drop item if both URL and infoHash are missing, or if URL is an invalid scheme
                     if (rawUrl.isNullOrBlank() && infoHash.isNullOrBlank()) {
+                        return@mapNotNull null
+                    }
+                    if (!rawUrl.isNullOrBlank() && (rawUrl.startsWith("about:", ignoreCase = true) || rawUrl.startsWith("javascript:", ignoreCase = true))) {
                         return@mapNotNull null
                     }
                     val finalUrl = rawUrl ?: "magnet:?xt=urn:btih:$infoHash"

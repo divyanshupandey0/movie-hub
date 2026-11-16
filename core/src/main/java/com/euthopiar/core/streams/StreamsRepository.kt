@@ -66,6 +66,7 @@ object StreamsRepository {
         lastLoadedHadTitle = !title.isNullOrBlank()
         activeRequestKey = requestToken
         activeJob?.cancel()
+        _uiState.value = StreamsUiState(requestToken = requestToken, isAnyLoading = true)
 
         val normType = normalizePluginType(type)
         val isCustomId = isCustomStremioAddonId(videoId)
@@ -74,10 +75,29 @@ object StreamsRepository {
         val effectiveOriginalLanguage = originalLanguage ?: if (normType == "anime") "ja" else null
 
         val storage = JsPluginStorage.getInstanceOrNull()
-        val scrapers = if (isLiveTv) emptyList() else (storage?.getEnabledScrapersForType(normType) ?: emptyList())
+        val rawScrapers = if (isLiveTv) emptyList() else (storage?.getEnabledScrapersForType(normType) ?: emptyList())
+        val scrapers = rawScrapers.filterNot {
+            it.id.contains("dahmer", ignoreCase = true) || it.name.contains("dahmer", ignoreCase = true) ||
+            it.id.contains("dharma", ignoreCase = true) || it.name.contains("dharma", ignoreCase = true)
+        }
         val addonRepo = com.euthopiar.core.addons.AddonRepository.getInstanceOrNull()
         val targetAddonType = if (isLiveTv) "live" else normType
-        val addons = addonRepo?.getEnabledAddonsForType(targetAddonType, cleanTmdbId) ?: emptyList()
+        val rawAddons = addonRepo?.getEnabledAddonsForType(targetAddonType, cleanTmdbId) ?: emptyList()
+        // Prioritize preferred default provider (Torrentio) first, with MediaFusion as secondary fallback, and PlavioHD
+        val addons = rawAddons.sortedWith(
+            compareByDescending<com.euthopiar.core.addons.ManagedAddon> {
+                it.displayTitle.contains("Torrentio", ignoreCase = true) ||
+                it.manifest?.id?.contains("torrentio", ignoreCase = true) == true
+            }.thenByDescending {
+                it.displayTitle.contains("MediaFusion", ignoreCase = true) ||
+                it.manifest?.id?.contains("mediafusion", ignoreCase = true) == true
+            }.thenByDescending {
+                it.displayTitle.contains("Plavio", ignoreCase = true) ||
+                it.manifest?.id?.contains("plavio", ignoreCase = true) == true
+            }
+        )
+
+        android.util.Log.d("MovieHubStreaming", "StreamsRepository.load: normType=$normType, videoId=$cleanTmdbId, season=$season, episode=$episode, title=$title, year=$year, imdbId=$imdbId, scrapers=${scrapers.size}, addons=${addons.size}")
 
         if (scrapers.isEmpty() && addons.isEmpty()) {
             _uiState.value = StreamsUiState(
@@ -105,7 +125,21 @@ object StreamsRepository {
                 isLoading = true
             )
         }
-        val initialGroups = scraperGroups + addonGroups
+        val torrentioGroups = addonGroups.filter {
+            it.addonName.contains("Torrentio", ignoreCase = true) || it.addonId.contains("torrentio", ignoreCase = true)
+        }
+        val mediafusionGroups = addonGroups.filter {
+            it.addonName.contains("MediaFusion", ignoreCase = true) || it.addonId.contains("mediafusion", ignoreCase = true)
+        }
+        val plaviohdGroups = addonGroups.filter {
+            it.addonName.contains("Plavio", ignoreCase = true) || it.addonId.contains("plavio", ignoreCase = true)
+        }
+        val otherAddonGroups = addonGroups.filterNot {
+            it.addonName.contains("Torrentio", ignoreCase = true) || it.addonId.contains("torrentio", ignoreCase = true) ||
+            it.addonName.contains("MediaFusion", ignoreCase = true) || it.addonId.contains("mediafusion", ignoreCase = true) ||
+            it.addonName.contains("Plavio", ignoreCase = true) || it.addonId.contains("plavio", ignoreCase = true)
+        }
+        val initialGroups = torrentioGroups + mediafusionGroups + plaviohdGroups + scraperGroups + otherAddonGroups
 
         _uiState.value = StreamsUiState(
             requestToken = requestToken,
@@ -209,7 +243,7 @@ object StreamsRepository {
             } else null
 
             val effectiveAddonId = effectiveImdbId ?: canonicalTmdbId
-            val addonStreamId = if (!isLiveTv && season != null && episode != null && season > 0) "$effectiveAddonId:$season:$episode" else effectiveAddonId
+            val addonStreamId = if (!isLiveTv && season != null && episode != null && season >= 0) "$effectiveAddonId:$season:$episode" else effectiveAddonId
 
             val streamHints = cachedEnriched?.toMatchHints(
                 isTv = isTv,
@@ -238,6 +272,10 @@ object StreamsRepository {
                 }
                 launch(Dispatchers.IO) {
                     try {
+                        android.util.Log.d(
+                            "MovieHubStreaming",
+                            "Scraper [${scraper.name}] Request: TMDB=$canonicalTmdbId, IMDb=$effectiveImdbId, Type=$jsMediaType, Season=$season, Episode=$episode, Title='$effectiveTitle'"
+                        )
                         val results = withTimeoutOrNull(60_000L) {
                             PluginRuntime.executePlugin(
                                 code = scraper.code,
@@ -273,6 +311,7 @@ object StreamsRepository {
                             )
                         }
                         val verifiedStreams = com.euthopiar.core.matcher.MatchScorer.filterAndRankStreams(streamHints, streamItems)
+                        android.util.Log.d("MovieHubStreaming", "Scraper [${scraper.name}] delivered ${verifiedStreams.size} verified streams (raw: ${streamItems.size})")
 
                         completions.trySend(
                             StreamLoadCompletion.PluginScraper(
@@ -284,6 +323,7 @@ object StreamsRepository {
                         )
                     } catch (t: Throwable) {
                         if (t is kotlinx.coroutines.CancellationException) throw t
+                        android.util.Log.e("MovieHubStreaming", "Scraper [${scraper.name}] failed: ${t.localizedMessage}", t)
                         completions.trySend(
                             StreamLoadCompletion.PluginScraper(
                                 addonId = addonId,
@@ -308,30 +348,39 @@ object StreamsRepository {
                     addon.manifest?.idPrefixes.orEmpty()
                 }
                 val addonSupportsTt = effectivePrefixes.isEmpty() || effectivePrefixes.any { it.startsWith("tt", ignoreCase = true) }
+                val supportsTmdb = effectivePrefixes.any { it.startsWith("tmdb", ignoreCase = true) }
                 val matchesPrefixes = effectivePrefixes.any { prefix ->
                     cleanTmdbId.startsWith(prefix, ignoreCase = true) ||
                     (prefix.endsWith(":") && cleanTmdbId.startsWith(prefix.removeSuffix(":"), ignoreCase = true))
                 }
-                val isSeries = !isLiveTv && (normType == "tv" || normType == "series" || (season != null && episode != null && season > 0))
+                val isSeries = !isLiveTv && (normType == "tv" || normType == "series" || (season != null && episode != null && season >= 0))
 
                 val perAddonStreamId = when {
                     isLiveTv -> cleanTmdbId
-                    matchesPrefixes || (isCustomId && !addonSupportsTt) -> {
-                        if (isSeries && season != null && episode != null && season > 0 && !cleanTmdbId.endsWith(":$season:$episode")) {
-                            "$cleanTmdbId:$season:$episode"
-                        } else {
-                            cleanTmdbId
-                        }
-                    }
                     !effectiveImdbId.isNullOrBlank() && effectiveImdbId.startsWith("tt") && addonSupportsTt -> {
-                        if (isSeries && season != null && episode != null && season > 0 && !effectiveImdbId.endsWith(":$season:$episode")) {
+                        if (isSeries && season != null && episode != null && season >= 0 && !effectiveImdbId.endsWith(":$season:$episode")) {
                             "$effectiveImdbId:$season:$episode"
                         } else {
                             effectiveImdbId
                         }
                     }
+                    supportsTmdb && cleanTmdbId.all { it.isDigit() } -> {
+                        val baseTmdb = "tmdb:$cleanTmdbId"
+                        if (isSeries && season != null && episode != null && season >= 0 && !baseTmdb.endsWith(":$season:$episode")) {
+                            "$baseTmdb:$season:$episode"
+                        } else {
+                            baseTmdb
+                        }
+                    }
+                    matchesPrefixes || (isCustomId && !addonSupportsTt) -> {
+                        if (isSeries && season != null && episode != null && season >= 0 && !cleanTmdbId.endsWith(":$season:$episode")) {
+                            "$cleanTmdbId:$season:$episode"
+                        } else {
+                            cleanTmdbId
+                        }
+                    }
                     isCustomId -> {
-                        if (isSeries && season != null && episode != null && season > 0 && !cleanTmdbId.endsWith(":$season:$episode")) {
+                        if (isSeries && season != null && episode != null && season >= 0 && !cleanTmdbId.endsWith(":$season:$episode")) {
                             "$cleanTmdbId:$season:$episode"
                         } else {
                             cleanTmdbId
@@ -368,20 +417,31 @@ object StreamsRepository {
                             extraPathSegment = null
                         )
                         val response = com.euthopiar.core.js.network.httpRequestRaw("GET", url, emptyMap(), "", followRedirects = true)
-                        val streamItems = if (response.status in 200..299 && response.body.isNotBlank()) {
-                            StreamParser.parse(
-                                payload = response.body,
-                                addonName = addon.displayTitle,
-                                addonId = addonId,
-                                addonLogo = addon.manifest?.logoUrl,
-                                originalLanguage = effectiveOriginalLanguage
-                            )
-                        } else emptyList()
+                        android.util.Log.d(
+                            "MovieHubStreaming",
+                            "Series/Movie Addon Request: Addon=[${addon.displayTitle}], URL=$url, HTTP=${response.status}, TMDB=$cleanTmdbId, IMDb=$effectiveImdbId, Type=$targetType, Season=$season, Episode=$episode, Title='$effectiveTitle'"
+                        )
 
-                        val shouldBypassMatchScorer = isLiveTv ||
-                            isCustomId ||
-                            !perAddonStreamId.startsWith("tt", ignoreCase = true) ||
-                            streamItems.any { it.isLive }
+                        val streamItems = if (response.status in 200..299 && response.body.isNotBlank()) {
+                            try {
+                                StreamParser.parse(
+                                    payload = response.body,
+                                    addonName = addon.displayTitle,
+                                    addonId = addonId,
+                                    addonLogo = addon.manifest?.logoUrl,
+                                    originalLanguage = effectiveOriginalLanguage
+                                )
+                            } catch (pe: Throwable) {
+                                android.util.Log.e("MovieHubStreaming", "Parsing error for addon [${addon.displayTitle}]: ${pe.localizedMessage}", pe)
+                                emptyList()
+                            }
+                        } else {
+                            android.util.Log.w("MovieHubStreaming", "Addon [${addon.displayTitle}] returned HTTP ${response.status} for $url")
+                            emptyList()
+                        }
+
+                        val isCanonicalQuery = perAddonStreamId.startsWith("tt", ignoreCase = true) || perAddonStreamId.startsWith("tmdb:", ignoreCase = true)
+                        val shouldBypassMatchScorer = isLiveTv || isCustomId || streamItems.any { it.isLive }
 
                         val verifiedStreams = if (shouldBypassMatchScorer) {
                             streamItems.map { item ->
@@ -392,8 +452,19 @@ object StreamsRepository {
                                 }
                             }
                         } else {
-                            com.euthopiar.core.matcher.MatchScorer.filterAndRankStreams(streamHints, streamItems)
+                            val scored = com.euthopiar.core.matcher.MatchScorer.filterAndRankStreams(streamHints, streamItems)
+                            if (scored.isNotEmpty()) {
+                                scored
+                            } else if (isCanonicalQuery) {
+                                streamItems.map { item ->
+                                    val fallbackScore = if (item.matchScore > 0.0) item.matchScore else 0.85
+                                    item.copy(matchScore = fallbackScore)
+                                }
+                            } else {
+                                emptyList()
+                            }
                         }
+                        android.util.Log.d("MovieHubStreaming", "Addon [${addon.displayTitle}] delivered ${verifiedStreams.size} verified streams (raw: ${streamItems.size}) for $perAddonStreamId")
 
                         completions.trySend(
                             StreamLoadCompletion.PluginScraper(
@@ -405,6 +476,7 @@ object StreamsRepository {
                         )
                     } catch (t: Throwable) {
                         if (t is kotlinx.coroutines.CancellationException) throw t
+                        android.util.Log.e("MovieHubStreaming", "Addon [${addon.displayTitle}] failed: ${t.localizedMessage}", t)
                         completions.trySend(
                             StreamLoadCompletion.PluginScraper(
                                 addonId = addonId,
@@ -421,6 +493,7 @@ object StreamsRepository {
                 val completion = completions.receive()
                 if (completion is StreamLoadCompletion.PluginScraper) {
                     _uiState.update { current ->
+                        if (current.requestToken != requestToken) return@update current
                         val updatedGroups = current.groups.map { group ->
                             if (group.addonId != completion.addonId) {
                                 group

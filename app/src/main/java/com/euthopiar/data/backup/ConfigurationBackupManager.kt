@@ -257,7 +257,7 @@ class ConfigurationBackupManager(private val context: Context) {
 
             // 10. Construct Root Backup Envelope
             val root = JSONObject().apply {
-                put("app", "Euthopiar")
+                put("app", "MOVIE HUB")
                 put("version", BACKUP_VERSION)
                 put("exportedAt", System.currentTimeMillis())
                 put("appVersion", appVersion)
@@ -350,10 +350,11 @@ class ConfigurationBackupManager(private val context: Context) {
                 )
             }
 
-            if (root.optString("app") != "Euthopiar") {
+            val appName = root.optString("app")
+            if (appName != "MOVIE HUB" && appName != "Euthopiar") {
                 return@withContext BackupInspectionResult(
                     isValid = false,
-                    errorMessage = "Selected file is not a valid Euthopiar configuration backup"
+                    errorMessage = "Selected file is not a valid MOVIE HUB configuration backup"
                 )
             }
 

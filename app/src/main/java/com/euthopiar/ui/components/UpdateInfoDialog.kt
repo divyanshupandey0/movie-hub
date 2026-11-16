@@ -311,6 +311,10 @@ fun UpdateInfoDialog(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null
 ) {
+    if (!com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) {
+        onDismiss()
+        return
+    }
     val context = LocalContext.current
     val updateManager = remember(context) { AppUpdateManager.getInstance(context) }
     val scrollState = rememberScrollState()
@@ -468,9 +472,9 @@ fun UpdateInfoDialog(
 
                     val subtitleText = buildString {
                         if (isNewerUpdate) {
-                            append("Euthopiar ${release.versionName} is available to download.")
+                            append("MOVIE HUB ${release.versionName} is available to download.")
                         } else {
-                            append("Euthopiar ${release.tagName}")
+                            append("MOVIE HUB ${release.tagName}")
                         }
                         if (formattedSize != null) {
                             append(" · $formattedSize")

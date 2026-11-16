@@ -97,7 +97,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * Settings "Support Euthopiar" Bottom Sheet.
+ * Settings "Support MOVIE HUB" Bottom Sheet.
  *
  * Implements fluid SeasonSheet-style drag-to-dismiss gesture physics:
  * - Direct drag on drag handle and header
@@ -380,7 +380,7 @@ fun SupportEuthopiarSheet(
                 ) {
                     // Title
                     Text(
-                        text = "Support Euthopiar",
+                        text = "Support MOVIE HUB",
                         style = EuthopiarGlassTokens.HeaderTitle
                     )
 

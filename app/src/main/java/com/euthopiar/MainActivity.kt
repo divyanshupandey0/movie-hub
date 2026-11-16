@@ -132,6 +132,11 @@ class MainActivity : ComponentActivity() {
             com.euthopiar.ui.splash.AppLaunchCoordinator.reset()
         }
 
+        // Initialize default appearance settings for new users (preserving existing user settings)
+        lifecycleScope.launch(Dispatchers.IO) {
+            PreferencesRepository.getInstance(applicationContext).initializeDefaultAppearancePreferences()
+        }
+
         // Automatic background reconciliation for Trakt, Simkl & Supabase Cloud
         lifecycleScope.launch(Dispatchers.IO) {
             com.euthopiar.data.sync.MediaSyncManager.getInstance(applicationContext).syncAll()
@@ -301,7 +306,10 @@ class MainActivity : ComponentActivity() {
 
     private fun handleDeepLink(intent: Intent?) {
         val uri = intent?.data ?: return
-        if (uri.scheme?.equals("Euthopiar", ignoreCase = true) == true &&
+        val isMovieHubScheme = uri.scheme?.equals("moviehub", ignoreCase = true) == true ||
+            uri.scheme?.equals("euthopiar", ignoreCase = true) == true
+
+        if (isMovieHubScheme &&
             uri.host.equals("auth", ignoreCase = true) &&
             uri.path?.startsWith("/simkl") == true
         ) {
@@ -334,7 +342,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val isTrakt = (uri.scheme?.equals("euthopiar", ignoreCase = true) == true &&
+        val isTrakt = (isMovieHubScheme &&
             uri.host.equals("auth", ignoreCase = true) &&
             uri.path?.startsWith("/trakt") == true) ||
             (uri.scheme?.equals("http", ignoreCase = true) == true &&

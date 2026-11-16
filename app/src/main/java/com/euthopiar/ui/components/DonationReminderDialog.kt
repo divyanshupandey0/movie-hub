@@ -229,7 +229,7 @@ fun DonationReminderDialog(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Enjoying Euthopiar?",
+                        text = "Enjoying MOVIE HUB?",
                         style = EuthopiarGlassTokens.HeaderTitle,
                         textAlign = TextAlign.Center
                     )

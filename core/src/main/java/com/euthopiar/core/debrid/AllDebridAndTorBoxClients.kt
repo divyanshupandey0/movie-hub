@@ -17,7 +17,7 @@ class AllDebridClient(
         if (apiKey.isBlank()) return@withContext Result.failure(IllegalArgumentException("Empty API key"))
         try {
             val request = Request.Builder()
-                .url("https://api.alldebrid.com/v4/user?agent=Euthopiar&apikey=$apiKey")
+                .url("https://api.alldebrid.com/v4/user?agent=MOVIE-HUB&apikey=$apiKey")
                 .get()
                 .build()
 

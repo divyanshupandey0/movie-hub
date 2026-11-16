@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -22,9 +23,17 @@ class PreferencesKeyMappingTest {
     private lateinit var repository: PreferencesRepository
 
     @Before
-    fun setup() {
+    fun setup() = runBlocking {
         context = ApplicationProvider.getApplicationContext()
         repository = PreferencesRepository.getInstance(context)
+        repository.clearAll()
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.INDIA_ALL
+    }
+
+    @After
+    fun tearDown() = runBlocking {
+        repository.clearAll()
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.INDIA_ALL
     }
 
     @Test
@@ -76,8 +85,11 @@ class PreferencesKeyMappingTest {
 
     @Test
     fun testDefaultAppearanceAndInterfacePreferences() = runBlocking {
+        val region = repository.contentRegionPreset.first()
+        assertEquals(com.euthopiar.core.model.ContentRegionPreset.INDIA_ALL, region)
+
         val cardScale = repository.cardScaleMode.first()
-        assertEquals(CardScaleMode.FLAGSHIP, cardScale)
+        assertEquals(CardScaleMode.COMPACT, cardScale)
 
         val navbarStyle = repository.navbarStyle.first()
         assertEquals(NavbarStyle.FLOATING, navbarStyle)
@@ -89,10 +101,13 @@ class PreferencesKeyMappingTest {
         assertEquals(SectionLabelStyle.AccentBar, sectionLabel)
 
         val longPressStyle = repository.longPressStyle.first()
-        assertEquals(com.euthopiar.ui.longpress.LongPressSheetStyle.HERO_PEEK, longPressStyle)
+        assertEquals(com.euthopiar.ui.longpress.LongPressSheetStyle.GLASS_MENU, longPressStyle)
 
         val reduceMotion = repository.reduceMotion.first()
         assertFalse(reduceMotion)
+
+        val amoled = repository.amoledMode.first()
+        assertTrue(amoled)
     }
 
     @Test
@@ -112,12 +127,12 @@ class PreferencesKeyMappingTest {
     @Test
     fun testSmartFailoverAndAudioPassthroughPreferences() = runBlocking {
         val smartFailover = repository.smartFailoverEnabled.first()
-        assertFalse(smartFailover)
+        assertTrue(smartFailover)
 
-        repository.setSmartFailoverEnabled(true)
-        assertTrue(repository.smartFailoverEnabled.first())
         repository.setSmartFailoverEnabled(false)
         assertFalse(repository.smartFailoverEnabled.first())
+        repository.setSmartFailoverEnabled(true)
+        assertTrue(repository.smartFailoverEnabled.first())
 
         val audioPassthrough = repository.audioPassthroughEnabled.first()
         assertFalse(audioPassthrough)
@@ -126,6 +141,26 @@ class PreferencesKeyMappingTest {
         assertTrue(repository.audioPassthroughEnabled.first())
         repository.setAudioPassthroughEnabled(false)
         assertFalse(repository.audioPassthroughEnabled.first())
+    }
+
+    @Test
+    fun testTorrentioAndAudioLanguageDefaultPreferences() = runBlocking {
+        assertEquals("Torrentio", repository.activeProvider.first())
+        assertEquals("hi", repository.preferredAudioLanguage.first())
+        assertEquals("en", repository.secondaryAudioLanguage.first())
+        assertTrue(repository.autoSourceSelection.first())
+
+        repository.setActiveProvider("Comet")
+        assertEquals("Comet", repository.activeProvider.first())
+
+        repository.setPreferredAudioLanguage("ja")
+        assertEquals("ja", repository.preferredAudioLanguage.first())
+
+        repository.setSecondaryAudioLanguage("fr")
+        assertEquals("fr", repository.secondaryAudioLanguage.first())
+
+        repository.setAutoSourceSelection(false)
+        assertFalse(repository.autoSourceSelection.first())
     }
 
     @Test

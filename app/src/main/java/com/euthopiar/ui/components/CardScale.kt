@@ -7,7 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.euthopiar.data.preferences.CardScaleMode
 
-val LocalCardScaleMode = compositionLocalOf { CardScaleMode.FLAGSHIP }
+val LocalCardScaleMode = compositionLocalOf { CardScaleMode.COMPACT }
 
 object CardDimensions {
     val BaseVerticalCardWidth: Dp = 135.dp

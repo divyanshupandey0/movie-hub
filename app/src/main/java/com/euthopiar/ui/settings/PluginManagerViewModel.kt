@@ -171,13 +171,9 @@ class PluginManagerViewModel(
             _isRefreshing.value = true
             try {
                 val existingUrls = preferencesRepository.repositoryUrls.first().filter { it.isNotBlank() }
-                val urls = if (existingUrls.isEmpty()) {
-                    val defaultUrl = PluginRepositoryService.DEFAULT_REPO_URL
-                    preferencesRepository.addRepositoryUrl(defaultUrl)
-                    listOf(defaultUrl)
-                } else {
-                    existingUrls
-                }
+                val officialRepos = listOf(PluginRepositoryService.DEFAULT_REPO_URL, PluginRepositoryService.SECONDARY_REPO_URL)
+                officialRepos.forEach { preferencesRepository.addRepositoryUrl(it) }
+                val urls = (existingUrls + officialRepos).filter { it.isNotBlank() }.distinct()
                 var total = 0
                 for (url in urls) {
                     val count = pluginService.installAllFromRepo(url)
@@ -208,7 +204,10 @@ class PluginManagerViewModel(
         }
         viewModelScope.launch {
             try {
-                pluginService.checkAndAutoUpdatePlugins(installNewFromRepos = false)
+                val autoRepoAllowed = preferencesRepository.autoOfficialRepoInstall.first()
+                if (autoRepoAllowed) {
+                    pluginService.checkAndAutoUpdatePlugins(installNewFromRepos = false)
+                }
             } catch (_: Exception) {}
         }
         loadPlugins()
@@ -233,9 +232,14 @@ class PluginManagerViewModel(
                                 val repoIndex = pluginService.fetchRepository(url)
                                 val repoPlugins = repoIndex.plugins.filterNot { it.isAdultPlugin }
                                 if (repoPlugins.isNotEmpty()) {
+                                    val repoName = if (repoIndex.name.isNotBlank() && !repoIndex.name.equals("manifest", ignoreCase = true)) {
+                                        repoIndex.name
+                                    } else {
+                                        com.euthopiar.core.js.inferRepoNameFromUrl(url)
+                                    }
                                     val repoInfo = ProviderRepoInfo(
                                         url = url,
-                                        name = repoIndex.name.ifBlank { url.substringAfterLast("/").substringBefore(".json") },
+                                        name = repoName,
                                         description = repoIndex.description,
                                         plugins = repoPlugins
                                     )
@@ -394,6 +398,22 @@ class PluginManagerViewModel(
                     onResult(true, res.getOrNull()?.manifest?.name)
                 } else {
                     onResult(false, res.exceptionOrNull()?.message ?: "Failed to install addon")
+                }
+            }
+        }
+    }
+
+    fun registerPlavioHd(enabled: Boolean = true, onResult: ((Boolean, String?) -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                val addon = addonRepository.registerPlavioHdAddon(enabled)
+                SupabaseSyncManager.getInstance(getApplication()).scheduleSync()
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(true, addon.displayTitle)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(false, e.localizedMessage)
                 }
             }
         }

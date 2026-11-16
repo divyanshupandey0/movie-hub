@@ -5,32 +5,152 @@ import com.euthopiar.core.model.PluginManifest
 import com.euthopiar.core.model.StreamContainer
 import com.euthopiar.core.model.StreamSource
 import com.euthopiar.core.model.SubtitleTrack
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.*
 
-@Serializable
+object StringListFlexibleSerializer : KSerializer<List<String>> {
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("StringListFlexible")
+
+    override fun serialize(encoder: Encoder, value: List<String>) {
+        encoder.encodeSerializableValue(ListSerializer(String.serializer()), value)
+    }
+
+    override fun deserialize(decoder: Decoder): List<String> {
+        val input = decoder as? JsonDecoder ?: return emptyList()
+        return when (val element = input.decodeJsonElement()) {
+            is JsonArray -> {
+                element.mapNotNull { item ->
+                    (item as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+                }
+            }
+            is JsonPrimitive -> {
+                val str = element.contentOrNull?.trim().orEmpty()
+                if (str.isBlank() || str.equals("null", ignoreCase = true)) {
+                    emptyList()
+                } else {
+                    str.split(Regex("""[\s,]+""")).map { it.trim() }.filter { it.isNotBlank() }
+                }
+            }
+            else -> emptyList()
+        }
+    }
+}
+
+@Serializable(with = JsRepoManifestSerializer::class)
 data class JsRepoManifest(
-    val name: String,
+    val name: String = "",
     val version: String = "1.0.0",
     val description: String? = null,
     val author: String? = null,
     val scrapers: List<JsScraperMeta> = emptyList()
 )
 
+object JsRepoManifestSerializer : KSerializer<JsRepoManifest> {
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("JsRepoManifest")
+
+    override fun serialize(encoder: Encoder, value: JsRepoManifest) {
+        val jsonEncoder = encoder as? JsonEncoder
+        if (jsonEncoder != null) {
+            val jsonObject = buildJsonObject {
+                put("name", JsonPrimitive(value.name))
+                put("version", JsonPrimitive(value.version))
+                value.description?.let { put("description", JsonPrimitive(it)) }
+                value.author?.let { put("author", JsonPrimitive(it)) }
+                put("scrapers", jsonEncoder.json.encodeToJsonElement(ListSerializer(JsScraperMeta.serializer()), value.scrapers))
+            }
+            jsonEncoder.encodeJsonElement(jsonObject)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): JsRepoManifest {
+        val input = decoder as? JsonDecoder ?: return JsRepoManifest()
+        val root = runCatching { input.decodeJsonElement().jsonObject }.getOrNull() ?: return JsRepoManifest()
+
+        val rawName = root["name"]?.jsonPrimitive?.contentOrNull?.trim()
+            ?: root["title"]?.jsonPrimitive?.contentOrNull?.trim()
+            ?: ""
+        val version = root["version"]?.jsonPrimitive?.contentOrNull?.trim() ?: "1.0.0"
+        val description = root["description"]?.jsonPrimitive?.contentOrNull?.trim()
+        val author = root["author"]?.jsonPrimitive?.contentOrNull?.trim()
+
+        val scrapersElement = root["scrapers"] ?: root["plugins"] ?: root["providers"]
+        val scrapers = if (scrapersElement != null && scrapersElement is JsonArray) {
+            scrapersElement.mapNotNull { item ->
+                try {
+                    input.json.decodeFromJsonElement(JsScraperMeta.serializer(), item)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        } else emptyList()
+
+        return JsRepoManifest(
+            name = rawName,
+            version = version,
+            description = description,
+            author = author,
+            scrapers = scrapers
+        )
+    }
+}
+
 @Serializable
 data class JsScraperMeta(
-    val id: String,
-    val name: String,
+    val id: String = "",
+    val name: String = "",
     val description: String? = null,
     val version: String = "1.0.0",
-    val filename: String,
+    val filename: String = "",
+    @Serializable(with = StringListFlexibleSerializer::class)
     @SerialName("supportedTypes") val supportedTypes: List<String> = listOf("movie", "tv"),
     val enabled: Boolean = true,
     val hasSettings: Boolean = false,
     val logo: String? = null,
+    @Serializable(with = StringListFlexibleSerializer::class)
     @SerialName("contentLanguage") val contentLanguage: List<String>? = null,
+    @Serializable(with = StringListFlexibleSerializer::class)
     val formats: List<String>? = null
 )
+
+fun inferRepoNameFromUrl(url: String): String {
+    val clean = url.trim()
+    if (clean.isBlank()) return "Repository"
+
+    if (clean.contains("All-in-One-Nuvio", ignoreCase = true)) return "All-in-One-Nuvio"
+    if (clean.contains("nuvio-providers", ignoreCase = true)) return "Yoru's Repo"
+
+    val githubRegex = Regex("""github(?:usercontent)?\.com/([^/]+)/([^/]+)""", RegexOption.IGNORE_CASE)
+    val ghMatch = githubRegex.find(clean)
+    if (ghMatch != null) {
+        val repo = ghMatch.groupValues[2]
+        if (repo.isNotBlank() && !repo.equals("manifest", ignoreCase = true) && !repo.equals("manifest.json", ignoreCase = true)) {
+            return repo
+        }
+    }
+
+    val segments = clean.removeSuffix("/").split("/").filter { seg ->
+        val s = seg.lowercase().substringBefore(".json").trim()
+        s.isNotBlank() && s !in setOf("manifest", "main", "master", "heads", "refs", "raw", "blob", "raw.githubusercontent.com", "github.com")
+    }
+    val candidate = segments.lastOrNull()?.substringBefore(".json")?.trim()
+    if (!candidate.isNullOrBlank()) {
+        return candidate.replace('-', ' ').replace('_', ' ').split(" ").joinToString(" ") {
+            it.replaceFirstChar { ch -> if (ch.isLowerCase()) ch.titlecase() else ch.toString() }
+        }
+    }
+
+    return "Repository"
+}
 
 fun computeCanonicalRepoId(repoUrl: String): String {
     val trimmed = repoUrl.trim()
@@ -48,10 +168,12 @@ data class PluginScraper(
     val description: String = "",
     val version: String = "1.0.0",
     val filename: String = "",
+    @Serializable(with = StringListFlexibleSerializer::class)
     val supportedTypes: List<String> = listOf("movie", "tv"),
     val enabled: Boolean = true,
     val hasSettings: Boolean = false,
     val logo: String? = null,
+    @Serializable(with = StringListFlexibleSerializer::class)
     val formats: List<String>? = null,
     val code: String = "",
     val repoId: String = ""

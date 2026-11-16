@@ -59,6 +59,9 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
 
             try {
                 val prefsRepo = PreferencesRepository.getInstance(this@EuthopiarApp)
+                launch(Dispatchers.IO) {
+                    prefsRepo.initializeDefaultAppearancePreferences()
+                }
                 launch {
                     kotlinx.coroutines.flow.combine(
                         prefsRepo.debridEnabled,
@@ -105,23 +108,19 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
                 val savedProvider = prefsRepo.activeProvider.first()
                 if (savedProvider.isNotBlank() && PluginRegistry.Default.getPlugin(savedProvider) != null) {
                     PluginRegistry.Default.setActivePlugin(savedProvider)
-                } else {
-                    val firstPublic = PluginRepositoryService.getInstance(this@EuthopiarApp)
-                        .getInstalledPublicPlugins()
-                        .firstOrNull { it.isEnabled }
-                    if (firstPublic != null) {
-                        PluginRegistry.Default.setActivePlugin(firstPublic.name)
-                        prefsRepo.setActiveProvider(firstPublic.name)
-                    }
                 }
             } catch (_: Exception) {}
 
             launch(Dispatchers.IO) {
                 try {
-                    val updated = PluginRepositoryService.getInstance(this@EuthopiarApp)
-                        .checkAndAutoUpdatePlugins(installNewFromRepos = false)
-                    if (updated > 0) {
-                        android.util.Log.i("EuthopiarApp", "Auto-updated $updated provider plugin(s) on launch")
+                    val prefsRepo = PreferencesRepository.getInstance(this@EuthopiarApp)
+                    val autoRepoAllowed = prefsRepo.autoOfficialRepoInstall.first()
+                    if (autoRepoAllowed) {
+                        val updated = PluginRepositoryService.getInstance(this@EuthopiarApp)
+                            .checkAndAutoUpdatePlugins(installNewFromRepos = false)
+                        if (updated > 0) {
+                            android.util.Log.i("EuthopiarApp", "Auto-updated $updated provider plugin(s) on launch")
+                        }
                     }
                 } catch (e: Exception) {
                     android.util.Log.w("EuthopiarApp", "Startup plugin auto-update error: ${e.message}")

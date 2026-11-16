@@ -474,27 +474,36 @@ object MatchScorer {
                 releaseCandidate.contains("Season Complete", ignoreCase = true) ||
                 Regex("""\b(?:complete|batch|full\s*season|all\s*episodes)\b""", RegexOption.IGNORE_CASE).containsMatchIn(releaseCandidate)
 
-        val streamSeasonOnly = Regex("""\bS(?:eason)?\s*(\d{1,2})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)?.groupValues?.get(1)?.toIntOrNull()
+        val multiSeasonMatch = Regex("""\bS(?:easons?)?\s*0*(\d{1,2})\s*[-~至到/]\s*S?(?:easons?)?\s*0*(\d{1,2})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)
+            ?: Regex("""\b(?:Season|Seasons)\s*0*(\d{1,2})\s*[-~至到/]\s*0*(\d{1,2})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)
+
+        val multiSeasonStart = multiSeasonMatch?.groupValues?.get(1)?.toIntOrNull()
+        val multiSeasonEnd = multiSeasonMatch?.groupValues?.get(2)?.toIntOrNull()
+        val isMultiSeasonContained = hints.season != null && multiSeasonStart != null && multiSeasonEnd != null &&
+                hints.season in minOf(multiSeasonStart, multiSeasonEnd)..maxOf(multiSeasonStart, multiSeasonEnd)
+
+        val streamSeasonOnly = if (multiSeasonMatch != null) null else Regex("""\bS(?:eason)?\s*(\d{1,2})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)?.groupValues?.get(1)?.toIntOrNull()
         val hasExplicitEpisode = Regex("""\bE(\d{1,3})\b""", RegexOption.IGNORE_CASE).containsMatchIn(releaseCandidate) ||
                 Regex("""\b(?:ep|episode)\s*(\d{1,3})\b""", RegexOption.IGNORE_CASE).containsMatchIn(releaseCandidate)
 
         val isSeasonPack = hints.type != ContentType.MOVIE &&
-                (isCompletePack || (streamSeasonOnly != null && !hasExplicitEpisode)) &&
-                (hints.season == null || streamSeasonOnly == null || streamSeasonOnly == hints.season)
+                (isCompletePack || isMultiSeasonContained || (streamSeasonOnly != null && !hasExplicitEpisode)) &&
+                (hints.season == null || isMultiSeasonContained || streamSeasonOnly == null || streamSeasonOnly == hints.season)
 
         // 4. Parse single Season & Episode markers
-        val seMatch = Regex("""\bS(\d{1,2})[\s._-]*E(\d{1,3})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)
+        val seMatch = Regex("""(?:\b|[_.\-\s])S(\d{1,2})[\s._-]*E(\d{1,3})(?:\b|[_.\-\s])""", RegexOption.IGNORE_CASE).find(releaseCandidate)
             ?: Regex("""\bSeason\s*(\d{1,2})\s*Episode\s*(\d{1,3})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)
             ?: Regex("""\b(\d{1,2})x(\d{1,3})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)
 
-        val streamSeason = seMatch?.groupValues?.get(1)?.toIntOrNull() ?: streamSeasonOnly
+        val streamSeason = seMatch?.groupValues?.get(1)?.toIntOrNull()
+            ?: (if (isMultiSeasonContained) hints.season else streamSeasonOnly)
 
         val resolutionCodecNumbers = setOf(240, 360, 480, 576, 720, 1080, 1440, 2160, 264, 265)
         val bracketNum = Regex("""\[(\d{1,3})\]""").find(releaseCandidate)?.groupValues?.get(1)?.toIntOrNull()
         val safeBracketEpisode = if (bracketNum != null && bracketNum !in resolutionCodecNumbers) bracketNum else null
 
         val streamEpisode = seMatch?.groupValues?.get(2)?.toIntOrNull()
-            ?: Regex("""\b(?:ep|episode|e)[\s._-]*(\d{1,3})\b""", RegexOption.IGNORE_CASE).find(releaseCandidate)?.groupValues?.get(1)?.toIntOrNull()
+            ?: Regex("""(?:\b|[_.\-\s])(?:ep|episode|e)[\s._-]*(\d{1,3})(?:\b|[_.\-\s])""", RegexOption.IGNORE_CASE).find(releaseCandidate)?.groupValues?.get(1)?.toIntOrNull()
             ?: safeBracketEpisode
             ?: Regex("""\s-\s+(\d{1,3})\b""").find(releaseCandidate)?.groupValues?.get(1)?.toIntOrNull()
 
@@ -562,7 +571,7 @@ object MatchScorer {
         // 6. Extract Candidate Release Title
         var rawReleaseTitle = releaseCandidate
         val epMatch = seMatch
-            ?: Regex("""\b(?:ep|episode|e)[\s._-]*\d{1,3}\b""", RegexOption.IGNORE_CASE).find(rawReleaseTitle)
+            ?: Regex("""(?:\b|[_.\-\s])(?:ep|episode|e)[\s._-]*\d{1,3}(?:\b|[_.\-\s])""", RegexOption.IGNORE_CASE).find(rawReleaseTitle)
             ?: Regex("""\s-\s+\d{1,3}\b""").find(rawReleaseTitle)
             ?: Regex("""\[\d{1,3}\]""").find(rawReleaseTitle)
 
@@ -586,7 +595,34 @@ object MatchScorer {
             .filter { it.isNotBlank() }
             .ifEmpty { listOf(normCandidateTitle) }
 
-        val maxTitleSim = allHintTitles.maxOfOrNull { jaroWinkler(it, normCandidateTitle) } ?: 0.0
+        val titleCandidates = mutableSetOf<String>()
+        if (normCandidateTitle.isNotBlank()) {
+            titleCandidates.add(normCandidateTitle)
+        }
+        listOfNotNull(streamTitle, streamDescription).flatMap { it.lines() }.forEach { rawLine ->
+            val cleanLine = rawLine.trim()
+            if (cleanLine.isNotBlank() && !isGenericStreamLabel(cleanLine, scraperName, titleYearsOrNumbers)) {
+                val candidateLineTitle = extractCandidateTitleFromLine(cleanLine, titleYearsOrNumbers)
+                val normLineTitle = normalize(candidateLineTitle)
+                if (normLineTitle.isNotBlank()) {
+                    titleCandidates.add(normLineTitle)
+                }
+            }
+        }
+
+        val maxTitleSim = titleCandidates.maxOfOrNull { cand ->
+            allHintTitles.maxOfOrNull { hint ->
+                val baseSim = jaroWinkler(hint, cand)
+                val isAcronym = isAcronymMatch(hint, cand) || (cand.split(' ').any { isAcronymMatch(hint, it) })
+                val isSub = (cand.length >= 4 && hint.contains(cand)) || (hint.length >= 4 && cand.contains(hint))
+                when {
+                    baseSim >= 0.85 -> baseSim
+                    isAcronym -> 0.95
+                    isSub -> 0.90
+                    else -> baseSim
+                }
+            } ?: 0.0
+        } ?: 0.0
 
         // 7. Year Verification
         val allCandidateYears = Regex("""(?<!\d)((?:19|20)\d{2})(?!p|\d)""").findAll(releaseCandidate)
@@ -604,20 +640,30 @@ object MatchScorer {
 
         var yearBonus = 0.0
         if (streamYear != null && candidateTargetYears.isNotEmpty()) {
-            val minYearDiff = candidateTargetYears.minOf { abs(streamYear - it) }
-            // Hard contradiction on release year:
-            // Year difference > 2 for movies (e.g. 1984 vs 2021) or year difference > 1 with low title similarity (< 0.75)
             val isMovie = hints.type == ContentType.MOVIE
-            if ((isMovie && minYearDiff > 2) || (minYearDiff > 1 && maxTitleSim < 0.75)) {
+            val minYearDiff = candidateTargetYears.minOf { abs(streamYear - it) }
+            val earliestTargetYear = candidateTargetYears.minOrNull() ?: streamYear
+            val isAiredAfterPremiere = !isMovie && streamYear >= earliestTargetYear
+
+            // Hard contradiction on release year:
+            // For movies: year difference > 2 (e.g. 1984 vs 2021) or year difference > 1 with low title similarity (< 0.80)
+            // For TV/Anime: only reject if the stream claims to have released significantly before the series premiere (< premiere - 1) with low title similarity
+            val hasContradiction = if (isMovie) {
+                minYearDiff > 2 || (minYearDiff > 1 && maxTitleSim < 0.80)
+            } else {
+                !isAiredAfterPremiere && (earliestTargetYear - streamYear > 1) && maxTitleSim < 0.75
+            }
+
+            if (hasContradiction) {
                 return StreamVerificationResult(
                     score = 0.0,
                     isAccepted = false,
                     reason = "Year mismatch: release year $streamYear is off by $minYearDiff years from $candidateTargetYears"
                 )
             }
-            yearBonus = when (minYearDiff) {
-                0 -> 0.20
-                1 -> 0.10
+            yearBonus = when {
+                minYearDiff == 0 -> 0.20
+                minYearDiff == 1 || isAiredAfterPremiere -> 0.10
                 else -> -0.15
             }
         }
@@ -654,6 +700,37 @@ object MatchScorer {
             isAccepted = isAccepted,
             reason = if (isAccepted) "Verified (score: $effectiveScore)" else "Title similarity too low ($maxTitleSim)"
         )
+    }
+
+    fun isAcronymMatch(hintTitle: String, candidateTitle: String): Boolean {
+        val cleanHint = hintTitle.replace(Regex("""['’]s\b""", RegexOption.IGNORE_CASE), "")
+        val normHint = normalize(cleanHint)
+        val normCand = normalize(candidateTitle).replace(" ", "")
+        if (normCand.length < 2 || normCand.length > 8) return false
+        val words = normHint.split(' ').filter { it.isNotBlank() && it.lowercase() != "s" }
+        if (words.size < 2) return false
+        val strictAcronym = words.map { it.first() }.joinToString("")
+        val filteredAcronym = words.filter { it !in setOf("and", "of", "the", "in", "on", "at", "to", "for", "a", "an") }
+            .map { it.first() }
+            .joinToString("")
+        return normCand.equals(strictAcronym, ignoreCase = true) ||
+               normCand.equals(filteredAcronym, ignoreCase = true)
+    }
+
+    private fun extractCandidateTitleFromLine(line: String, titleYearsOrNumbers: Set<Int>): String {
+        var clean = line.trim()
+        val seMarker = Regex("""\b(?:s\d{1,2}[\s._-]*e\d{1,3}|season\s*\d+|ep(?:isode)?[\s._-]*\d{1,3})\b""", RegexOption.IGNORE_CASE).find(clean)
+        if (seMarker != null && seMarker.range.first > 1) {
+            clean = clean.substring(0, seMarker.range.first)
+        } else {
+            val yearMarker = Regex("""(?<!\d)(?:19|20)\d{2}(?!p|\d)""").findAll(clean).firstOrNull { m ->
+                m.value.toIntOrNull() !in titleYearsOrNumbers
+            }
+            if (yearMarker != null && yearMarker.range.first > 2) {
+                clean = clean.substring(0, yearMarker.range.first)
+            }
+        }
+        return clean.replace('.', ' ').replace('_', ' ').trim()
     }
 
     private fun isGenericStreamLabel(text: String, scraperName: String?, titleYearsOrNumbers: Set<Int> = emptySet()): Boolean {

@@ -353,6 +353,50 @@ class PlayerPlaybackNetworkingTest {
     }
 
     @Test
+    fun testStreamUrlWithSigPreservesRefererAndOrigin() {
+        thread {
+            try {
+                val clientSock = serverSocket?.accept() ?: return@thread
+                val reader = BufferedReader(InputStreamReader(clientSock.getInputStream()))
+                var referer: String? = null
+                var origin: String? = null
+                var headerLine = reader.readLine()
+                while (!headerLine.isNullOrEmpty()) {
+                    if (headerLine.startsWith("Referer:", ignoreCase = true)) {
+                        referer = headerLine.substringAfter(":").trim()
+                    }
+                    if (headerLine.startsWith("Origin:", ignoreCase = true)) {
+                        origin = headerLine.substringAfter(":").trim()
+                    }
+                    headerLine = reader.readLine()
+                }
+                val out = clientSock.getOutputStream()
+                val body = "ref=${referer ?: "none"}|orig=${origin ?: "none"}"
+                val resp = "HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body"
+                out.write(resp.toByteArray())
+                out.flush()
+                clientSock.close()
+            } catch (_: Exception) {}
+        }
+
+        val client = PlayerPlaybackNetworking.playbackHttpClient
+        val request = Request.Builder()
+            .url("http://127.0.0.1:$port/stream.m3u8?sig=streamtoken123&expires=9999999999")
+            .header("Referer", "https://streamprovider.com/embed/123")
+            .header("Origin", "https://streamprovider.com")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            assertTrue(response.isSuccessful)
+            assertEquals(
+                "Referer and Origin must NOT be stripped on stream URLs containing sig parameter",
+                "ref=https://streamprovider.com/embed/123|orig=https://streamprovider.com",
+                response.body?.string()
+            )
+        }
+    }
+
+    @Test
     fun testCancelLoopbackPlaybackCalls() {
         val countDownLatch = java.util.concurrent.CountDownLatch(1)
         var callCanceled = false

@@ -41,6 +41,6 @@ enum class LongPressSheetStyle(
 
     companion object {
         fun fromId(id: String?): LongPressSheetStyle =
-            entries.firstOrNull { it.id == id } ?: HERO_PEEK
+            entries.firstOrNull { it.id == id } ?: GLASS_MENU
     }
 }

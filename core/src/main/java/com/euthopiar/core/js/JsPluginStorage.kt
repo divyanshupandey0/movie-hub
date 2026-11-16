@@ -53,6 +53,16 @@ class JsPluginStorage(private val context: Context) {
         if (namespacedFile.exists()) return namespacedFile
         val legacyFile = File(legacyPluginsDir, "$cleanPluginId.js")
         if (legacyFile.exists()) return legacyFile
+
+        // Check any other directory under pluginsRootDir
+        val otherMatch = pluginsRootDir.listFiles()?.firstNotNullOfOrNull { dir ->
+            if (dir.isDirectory) {
+                val candidate = File(dir, "$cleanPluginId.js")
+                if (candidate.exists()) candidate else null
+            } else null
+        }
+        if (otherMatch != null) return otherMatch
+
         return namespacedFile
     }
 
@@ -60,6 +70,11 @@ class JsPluginStorage(private val context: Context) {
         val cleanRepo = repoId.ifBlank { "local" }
         val cleanId = scraperId.substringAfter(":")
         return "$cleanRepo:$cleanId"
+    }
+
+    fun isBlockedScraper(id: String, name: String? = null, filename: String? = null): Boolean {
+        val target = "$id ${name.orEmpty()} ${filename.orEmpty()}".lowercase()
+        return target.contains("dahmer") || target.contains("dharma")
     }
 
     private val _scrapersFlow = MutableStateFlow<List<PluginScraper>>(emptyList())
@@ -95,7 +110,18 @@ class JsPluginStorage(private val context: Context) {
             }.getOrElse { emptyList() }
         } else emptyList()
 
-        val populated = scrapers.map { scraper ->
+        val blockedScrapers = scrapers.filter { isBlockedScraper(it.id, it.name, it.filename) }
+        for (blocked in blockedScrapers) {
+            val rId = blocked.canonicalRepoId
+            val cleanId = blocked.id.substringAfter(":")
+            try { getPluginScriptFile(rId, cleanId).delete() } catch (_: Exception) {}
+            try { File(legacyPluginsDir, "$cleanId.js").delete() } catch (_: Exception) {}
+            com.euthopiar.core.registry.PluginRegistry.Default.unregisterPlugin(blocked.name)
+        }
+
+        val populated = scrapers
+            .filterNot { isBlockedScraper(it.id, it.name, it.filename) }
+            .map { scraper ->
             val rId = scraper.canonicalRepoId
             val cleanId = scraper.id.substringAfter(":")
             val namespacedId = if (scraper.id.contains(":")) scraper.id else getStorageKey(rId, cleanId)
@@ -132,13 +158,48 @@ class JsPluginStorage(private val context: Context) {
         _repositoriesFlow.value = repos
     }
 
+    fun getCachedRepoManifest(manifestUrl: String): JsRepoManifest? {
+        val repoId = computeCanonicalRepoId(manifestUrl)
+        val cachedFile = File(getRepoDir(repoId), "manifest.json")
+        if (cachedFile.exists()) {
+            try {
+                val parsed = json.decodeFromString<JsRepoManifest>(cachedFile.readText())
+                val resolvedName = if (parsed.name.isNotBlank() && !parsed.name.equals("manifest", ignoreCase = true)) {
+                    parsed.name
+                } else {
+                    inferRepoNameFromUrl(manifestUrl)
+                }
+                val cleanScrapers = parsed.scrapers.filterNot { isBlockedScraper(it.id, it.name, it.filename) }
+                return parsed.copy(name = resolvedName, scrapers = cleanScrapers)
+            } catch (_: Exception) {}
+        }
+        return null
+    }
+
     suspend fun fetchRepositoryManifest(manifestUrl: String): Result<JsRepoManifest> = withContext(Dispatchers.IO) {
+        val repoId = computeCanonicalRepoId(manifestUrl)
+        val cachedFile = File(getRepoDir(repoId), "manifest.json")
+
         runCatching {
             val response = httpRequestRaw("GET", manifestUrl, noCacheHeaders, "", followRedirects = true)
-            if (response.status !in 200..299 || response.body.isBlank()) {
-                error("Failed to load manifest: HTTP ${response.status}")
+            if (response.status in 200..299 && response.body.isNotBlank()) {
+                val parsed = json.decodeFromString<JsRepoManifest>(response.body)
+                val resolvedName = if (parsed.name.isNotBlank() && !parsed.name.equals("manifest", ignoreCase = true)) {
+                    parsed.name
+                } else {
+                    inferRepoNameFromUrl(manifestUrl)
+                }
+                val cleanScrapers = parsed.scrapers.filterNot { isBlockedScraper(it.id, it.name, it.filename) }
+                val manifestWithCleanName = parsed.copy(name = resolvedName, scrapers = cleanScrapers)
+                try {
+                    writeTextAtomically(cachedFile, json.encodeToString(manifestWithCleanName))
+                } catch (_: Exception) {}
+                manifestWithCleanName
+            } else {
+                getCachedRepoManifest(manifestUrl) ?: error("Failed to load manifest: HTTP ${response.status}")
             }
-            json.decodeFromString<JsRepoManifest>(response.body)
+        }.recoverCatching { err ->
+            getCachedRepoManifest(manifestUrl) ?: throw err
         }
     }
 
@@ -150,7 +211,15 @@ class JsPluginStorage(private val context: Context) {
         val baseUrl = manifestUrl.substringBeforeLast("/") + "/"
         val repoId = computeCanonicalRepoId(manifestUrl)
 
-        val distinctScrapers = manifest.scrapers.distinctBy { it.id.lowercase().trim() }
+        // Ensure manifest is cached locally
+        try {
+            val cachedFile = File(getRepoDir(repoId), "manifest.json")
+            writeTextAtomically(cachedFile, json.encodeToString(manifest))
+        } catch (_: Exception) {}
+
+        val distinctScrapers = manifest.scrapers
+            .filterNot { isBlockedScraper(it.id, it.name, it.filename) }
+            .distinctBy { it.id.lowercase().trim() }
         val downloadedScrapers = coroutineScope {
             distinctScrapers.map { scraperMeta ->
                 async(Dispatchers.IO) {
@@ -273,6 +342,9 @@ class JsPluginStorage(private val context: Context) {
         logo: String?,
         code: String
     ): PluginScraper = withContext(Dispatchers.IO) {
+        if (isBlockedScraper(id, name, filename)) {
+            throw IllegalArgumentException("Scraper $name is blocked")
+        }
         if (!isValidJsPluginCode(code)) {
             throw IllegalArgumentException("Invalid JavaScript plugin code for $name")
         }
@@ -401,9 +473,32 @@ class JsPluginStorage(private val context: Context) {
 
     fun getEnabledScrapersForType(type: String): List<PluginScraper> {
         val normType = normalizePluginType(type)
-        return getEnabledScrapers().filter { scraper ->
+        val inMemory = getEnabledScrapers().filter { scraper ->
             scraper.supportsType(normType)
         }
+        if (inMemory.isNotEmpty()) return inMemory
+
+        // Fallback: If in-memory scrapers have blank code, attempt reading script from disk
+        val diskRecovered = _scrapersFlow.value
+            .filter { it.enabled && it.supportsType(normType) }
+            .map { scraper ->
+                if (scraper.code.isBlank()) {
+                    val scriptFile = getPluginScriptFile(scraper.canonicalRepoId, scraper.id)
+                    if (scriptFile.exists() && scriptFile.length() > 0) {
+                        scraper.copy(code = scriptFile.readText())
+                    } else scraper
+                } else scraper
+            }
+            .filter { it.code.isNotBlank() }
+
+        if (diskRecovered.isNotEmpty()) {
+            _scrapersFlow.value = _scrapersFlow.value.map { current ->
+                diskRecovered.find { it.id == current.id } ?: current
+            }
+            return diskRecovered
+        }
+
+        return inMemory
     }
 
     /**
@@ -436,7 +531,9 @@ class JsPluginStorage(private val context: Context) {
             val baseUrl = manifestUrl.substringBeforeLast("/") + "/"
             val currentInstalled = _scrapersFlow.value
 
-            val distinctScrapers = manifest.scrapers.distinctBy { it.id.lowercase().trim() }
+            val distinctScrapers = manifest.scrapers
+            .filterNot { isBlockedScraper(it.id, it.name, it.filename) }
+            .distinctBy { it.id.lowercase().trim() }
 
             val toDownload = distinctScrapers.mapNotNull { meta ->
                 val cleanMetaId = meta.id.substringAfter(":")

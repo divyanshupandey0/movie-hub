@@ -52,3 +52,22 @@ Refrence Nuviou/NuvioMobile/
 Refrence Nuviou/NuvioMobile
 AI_RULES.md
 .agents/skills/euthopiar-pipeline/
+
+
+# Sensitive files - NEVER upload
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+secrets.properties
+
+# Build outputs
+**/build/
+
+# IDE and local files
+.idea/
+.kotlin/
+
+# Temporary files
+*.log

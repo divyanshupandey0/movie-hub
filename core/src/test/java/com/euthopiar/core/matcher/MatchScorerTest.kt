@@ -571,4 +571,72 @@ class MatchScorerTest {
         org.junit.Assert.assertFalse("Stream with contradictory raw scraped title must be rejected", result.isAccepted)
         assertEquals(0.0, result.score, 0.001)
     }
+
+    @Test
+    fun testTvEpisodeAiredInLaterYearNotRejectedAsMismatch() {
+        val hints = MatchHints(
+            tmdbId = 1399,
+            type = ContentType.TV_SERIES,
+            titles = setOf("Game of Thrones"),
+            premiereYear = 2011,
+            year = 2011,
+            season = 8,
+            episode = 1
+        )
+        val stream = com.euthopiar.core.streams.StreamItem(
+            name = "Game.of.Thrones.S08E01.2019.1080p.WEB-DL",
+            addonName = "Torrentio",
+            addonId = "torrentio"
+        )
+        val result = MatchScorer.scoreStream(hints, stream)
+        assertTrue("TV episode released in later airing year (2019) than series premiere (2011) must be accepted", result.isAccepted)
+        assertTrue("Score must be high for matching season and episode", result.score >= 0.70)
+    }
+
+    @Test
+    fun testMultiSeasonPackAcceptedForContainedSeason() {
+        val hints = MatchHints(
+            tmdbId = 1396,
+            type = ContentType.TV_SERIES,
+            titles = setOf("Breaking Bad"),
+            premiereYear = 2008,
+            year = 2008,
+            season = 2,
+            episode = 4
+        )
+        val stream = com.euthopiar.core.streams.StreamItem(
+            name = "Breaking.Bad.S01-S03.1080p.BluRay.x264",
+            addonName = "Torrentio",
+            addonId = "torrentio"
+        )
+        val result = MatchScorer.scoreStream(hints, stream)
+        assertTrue("Multi-season pack S01-S03 containing requested Season 2 must be accepted", result.isAccepted)
+        assertTrue("Score must be high for contained season pack", result.score >= 0.70)
+    }
+
+    @Test
+    fun testMovieRemakeRejectedWhenYearsContradict() {
+        val hints = MatchHints(
+            tmdbId = 532639,
+            type = ContentType.MOVIE,
+            titles = setOf("Pinocchio"),
+            year = 2022
+        )
+        val stream1940 = com.euthopiar.core.streams.StreamItem(
+            name = "Pinocchio.1940.1080p.BluRay.x264",
+            addonName = "Torrentio",
+            addonId = "torrentio"
+        )
+        val result1940 = MatchScorer.scoreStream(hints, stream1940)
+        org.junit.Assert.assertFalse("1940 movie must be rejected when 2022 remake is requested", result1940.isAccepted)
+
+        val stream2022 = com.euthopiar.core.streams.StreamItem(
+            name = "Pinocchio.2022.1080p.WEBRip.x264",
+            addonName = "Torrentio",
+            addonId = "torrentio"
+        )
+        val result2022 = MatchScorer.scoreStream(hints, stream2022)
+        assertTrue("2022 movie stream must be accepted for 2022 movie", result2022.isAccepted)
+        assertTrue("Score must be high for matching movie title and year", result2022.score >= 0.70)
+    }
 }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.transformWhile
@@ -745,7 +746,9 @@ open class ProviderRepository(
         imdbId: String? = null,
         title: String? = null,
         year: Int? = null,
-        originalLanguage: String? = null
+        originalLanguage: String? = null,
+        season: Int? = null,
+        episode: Int? = null
     ): Flow<StreamEmission> = channelFlow {
         val cleanData = episodeData.removePrefix("tmdb:").removePrefix("tmdb/")
         val isLiveTvType = mediaType != null && (
@@ -753,30 +756,68 @@ open class ProviderRepository(
             mediaType.equals("channel", ignoreCase = true) ||
             mediaType.equals("live_tv", ignoreCase = true)
         )
+        val isMovieType = mediaType != null && (
+            mediaType.equals("movie", ignoreCase = true) ||
+            mediaType.equals("movies", ignoreCase = true)
+        )
 
-        val (mediaId, season, episode) = if (isLiveTvType) {
+        val (mediaId, resolvedSeason, resolvedEpisode) = if (isLiveTvType || isMovieType) {
             Triple(cleanData, null, null)
-        } else {
-            val parts = cleanData.split(":")
-            val lastSeason = parts.getOrNull(parts.size - 2)?.toIntOrNull()
-            val lastEpisode = parts.getOrNull(parts.size - 1)?.toIntOrNull()
-            if (parts.size >= 3 && lastSeason != null && lastEpisode != null) {
-                Triple(parts.dropLast(2).joinToString(":"), lastSeason, lastEpisode)
-            } else if (parts.size == 2 && parts[0].toIntOrNull() != null && parts[1].toIntOrNull() != null) {
-                Triple(cleanData, parts[0].toInt(), parts[1].toInt())
+        } else if (season != null && episode != null) {
+            val cleanBaseId = if (cleanData.contains(":")) {
+                val parts = cleanData.split(":")
+                val lastSeason = parts.getOrNull(parts.size - 2)?.toIntOrNull()
+                val lastEpisode = parts.getOrNull(parts.size - 1)?.toIntOrNull()
+                if (parts.size >= 3 && lastSeason != null && lastEpisode != null) {
+                    parts.dropLast(2).joinToString(":")
+                } else {
+                    cleanData.substringBefore('?')
+                }
             } else {
-                Triple(cleanData, null, null)
+                cleanData.substringBefore('?')
+            }
+            Triple(cleanBaseId, season, episode)
+        } else {
+            // Check for query parameters (?season=X&episode=Y or ?s=X&e=Y)
+            val querySeason = Regex("""[?&]season=(\d+)""", RegexOption.IGNORE_CASE).find(cleanData)?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("""[?&]s=(\d+)""", RegexOption.IGNORE_CASE).find(cleanData)?.groupValues?.get(1)?.toIntOrNull()
+            val queryEpisode = Regex("""[?&]episode=(\d+)""", RegexOption.IGNORE_CASE).find(cleanData)?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("""[?&]e=(\d+)""", RegexOption.IGNORE_CASE).find(cleanData)?.groupValues?.get(1)?.toIntOrNull()
+
+            if (querySeason != null && queryEpisode != null) {
+                Triple(cleanData.substringBefore('?'), querySeason, queryEpisode)
+            } else {
+                val parts = cleanData.split(":")
+                val lastSeason = parts.getOrNull(parts.size - 2)?.toIntOrNull()
+                val lastEpisode = parts.getOrNull(parts.size - 1)?.toIntOrNull()
+                if (parts.size >= 3 && lastSeason != null && lastEpisode != null) {
+                    Triple(parts.dropLast(2).joinToString(":"), lastSeason, lastEpisode)
+                } else {
+                    Triple(cleanData, null, null)
+                }
             }
         }
-        val isTv = season != null && episode != null
+        val isTv = !isMovieType && resolvedSeason != null && resolvedEpisode != null
         val resolvedType = mediaType ?: if (isTv) "tv" else "movie"
+
+        android.util.Log.d("MovieHubStreaming", "ProviderRepository.getStreamFlow: mediaId=$mediaId, resolvedType=$resolvedType, season=$resolvedSeason, episode=$resolvedEpisode, title=$title, year=$year, imdbId=$imdbId")
+
+        val expectedRequestToken = com.euthopiar.core.streams.StreamsRepository.requestToken(
+            type = resolvedType,
+            videoId = mediaId,
+            season = resolvedSeason,
+            episode = resolvedEpisode,
+            title = title,
+            year = year,
+            imdbId = imdbId
+        )
 
         // Delegate to unified StreamsRepository for concurrency limiting, type filtering & caching
         com.euthopiar.core.streams.StreamsRepository.load(
             type = resolvedType,
             videoId = mediaId,
-            season = season,
-            episode = episode,
+            season = resolvedSeason,
+            episode = resolvedEpisode,
             title = title,
             year = year,
             forceRefresh = true,
@@ -788,6 +829,7 @@ open class ProviderRepository(
         val seenUrls = mutableSetOf<String>()
         var sawLoading = false
         com.euthopiar.core.streams.StreamsRepository.uiState
+            .filter { it.requestToken == expectedRequestToken }
             .transformWhile { state ->
                 emit(state)
                 if (state.isAnyLoading || state.groups.any { it.isLoading }) {
@@ -855,8 +897,8 @@ open class ProviderRepository(
                                 seeders = stream.seeders,
                                 fileIdx = stream.fileIdx,
                                 addonId = stream.addonId,
-                                season = season,
-                                episode = episode,
+                                season = resolvedSeason ?: season,
+                                episode = resolvedEpisode ?: episode,
                                 responseHeaders = stream.responseHeaders,
                                 resolutionLabel = rLabel,
                                 matchScore = stream.matchScore,
@@ -867,7 +909,8 @@ open class ProviderRepository(
                                 addonName = effectiveAddon,
                                 container = resolvedContainer,
                                 trackers = stream.trackers,
-                                isLive = stream.isLive || (mediaType != null && (mediaType.equals("live", ignoreCase = true) || mediaType.equals("channel", ignoreCase = true) || mediaType.equals("live_tv", ignoreCase = true)))
+                                isLive = stream.isLive || (mediaType != null && (mediaType.equals("live", ignoreCase = true) || mediaType.equals("channel", ignoreCase = true) || mediaType.equals("live_tv", ignoreCase = true))),
+                                mediaId = mediaId
                             )
                             send(StreamEmission.SourceFound(src))
                             for (sub in subTracks) {

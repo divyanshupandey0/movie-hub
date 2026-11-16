@@ -41,6 +41,7 @@ fun HomeUpdateBanner(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null
 ) {
+    if (!com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) return
     val context = LocalContext.current
     val updateManager = remember(context) { AppUpdateManager.getInstance(context) }
     val updateState by updateManager.updateState.collectAsState()

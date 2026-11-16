@@ -260,7 +260,7 @@ fun AppNavHost(
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val preferencesRepository = remember { com.euthopiar.data.preferences.PreferencesRepository.getInstance(context) }
-    val cardScaleMode by preferencesRepository.cardScaleMode.collectAsState(initial = com.euthopiar.data.preferences.CardScaleMode.FLAGSHIP)
+    val cardScaleMode by preferencesRepository.cardScaleMode.collectAsState(initial = com.euthopiar.data.preferences.CardScaleMode.COMPACT)
     val navbarStyle by preferencesRepository.navbarStyle.collectAsState(initial = com.euthopiar.data.preferences.NavbarStyle.FLOATING)
     val firstRunCompleted by preferencesRepository.firstRunCompleted.collectAsState(initial = null)
     val isAmoledMode by preferencesRepository.amoledMode.collectAsState(initial = true)
@@ -397,20 +397,11 @@ fun AppNavHost(
         LaunchedEffect(firstRunCompleted, lastSavedVersion, walkthroughCompletedVersion, activeProfile.isKids) {
             if (firstRunCompleted != true) return@LaunchedEffect
             if (activeProfile.isKids) return@LaunchedEffect
-            val lastVer = lastSavedVersion ?: return@LaunchedEffect
             val completedVer = walkthroughCompletedVersion ?: return@LaunchedEffect
 
-            if (completedVer.isNotBlank()) return@LaunchedEffect
-
-            val coordinator = WalkthroughCoordinator.instance
-            if (!coordinator.isActive) {
-                val isFreshInstall = lastVer.isBlank()
-                if (isFreshInstall) {
-                    coordinator.start(isFreshInstall = true)
-                } else {
-                    // Existing installation updated to a newer version: do not show the walkthrough
-                    preferencesRepository.setWalkthroughCompletedVersion(currentAppVersion)
-                }
+            if (completedVer.isBlank()) {
+                // Ensure walkthrough is marked completed so no forced walkthrough/repository prompt appears
+                preferencesRepository.setWalkthroughCompletedVersion(currentAppVersion)
             }
         }
 
@@ -489,9 +480,9 @@ fun AppNavHost(
                     onContinueWatchingClick = { item ->
                         val isTv = item.mediaType != "LIVE_TV" && (item.mediaType == "TV_SERIES" || item.mediaType == "ANIME" || (item.mediaType == null && item.seasonNumber != null && item.seasonNumber > 0 && item.episodeNumber != null))
                         val typeStr = if (isTv) (item.mediaType ?: "TV_SERIES") else (item.mediaType ?: "MOVIE")
-                        val epData = item.episodeData ?: if (isTv) "${item.mediaId}:${item.seasonNumber ?: 1}:${item.episodeNumber ?: 1}" else item.mediaId
                         val season = if (isTv) (item.seasonNumber ?: 1) else 0
                         val episode = if (isTv) (item.episodeNumber ?: 1) else 0
+                        val epData = if (isTv) (item.episodeData ?: "${item.mediaId}:$season:$episode") else item.mediaId
                         navController.navigateSafely(
                             buildPlayerRoute(
                                 mediaId = item.mediaId,
@@ -514,9 +505,9 @@ fun AppNavHost(
                             history?.mediaType == "ANIME" ||
                             (history?.seasonNumber != null && history.seasonNumber > 0))
                         val typeStr = if (isTv) (history?.mediaType ?: item.type.name) else "MOVIE"
-                        val epData = history?.episodeData ?: if (isTv) "${item.id}:${history?.seasonNumber ?: 1}:${history?.episodeNumber ?: 1}" else item.id
                         val season = if (isTv) (history?.seasonNumber ?: 1) else 0
                         val episode = if (isTv) (history?.episodeNumber ?: 1) else 0
+                        val epData = if (isTv) (history?.episodeData ?: "${item.id}:$season:$episode") else item.id
                         val title = history?.title?.ifBlank { item.title } ?: item.title
                         navController.navigateSafely(
                             buildPlayerRoute(
@@ -527,7 +518,8 @@ fun AppNavHost(
                                 mediaTitle = title,
                                 episodeTitle = if (isTv) history?.episodeTitle else null,
                                 season = season,
-                                episode = episode
+                                episode = episode,
+                                year = item.year
                             )
                         )
                     },
@@ -558,6 +550,8 @@ fun AppNavHost(
                         val isTv = item.type != com.euthopiar.core.model.MediaType.LIVE_TV &&
                             (item.type == com.euthopiar.core.model.MediaType.TV_SERIES || item.type == com.euthopiar.core.model.MediaType.ANIME)
                         val typeStr = item.type.name
+                        val season = if (isTv) 1 else 0
+                        val episode = if (isTv) 1 else 0
                         val epData = if (isTv) "${item.id}:1:1" else item.id
                         navController.navigateSafely(
                             buildPlayerRoute(
@@ -567,8 +561,9 @@ fun AppNavHost(
                                 episodeData = epData,
                                 mediaTitle = item.title,
                                 episodeTitle = null,
-                                season = if (isTv) 1 else -1,
-                                episode = if (isTv) 1 else -1
+                                season = season,
+                                episode = episode,
+                                year = item.year
                             )
                         )
                     },
@@ -681,17 +676,15 @@ fun AppNavHost(
                     },
                     onPlayMedia = { detail, episode ->
                         val prov = detail.provider ?: provider ?: "tmdb"
-                        val firstEp = detail.episodes.firstOrNull()
                         val isTv = detail.type != com.euthopiar.core.model.MediaType.LIVE_TV &&
-                            (firstEp == null || firstEp.seasonNumber > 0) &&
                             (detail.type == com.euthopiar.core.model.MediaType.TV_SERIES || detail.type == com.euthopiar.core.model.MediaType.ANIME)
-                        val season = if (isTv) (episode?.seasonNumber ?: 1) else -1
-                        val epNum = if (isTv) (episode?.episodeNumber ?: 1) else -1
-                        val rawEpData = if (isTv) episode?.data else (firstEp?.data ?: episode?.data)
+                        val season = if (isTv) (episode?.seasonNumber ?: 1) else 0
+                        val epNum = if (isTv) (episode?.episodeNumber ?: 1) else 0
+                        val rawEpData = if (isTv) episode?.data else null
                         val epData = if (isTv) {
                             if (!rawEpData.isNullOrBlank() && rawEpData.contains(":")) rawEpData else "${detail.id}:$season:$epNum"
                         } else {
-                            rawEpData ?: detail.id
+                            detail.id
                         }
                         val epTitle = if (isTv) (episode?.title ?: "") else ""
                         navController.navigateSafely(
@@ -703,7 +696,8 @@ fun AppNavHost(
                                 mediaTitle = detail.title,
                                 episodeTitle = epTitle,
                                 season = season,
-                                episode = epNum
+                                episode = epNum,
+                                year = detail.year
                             )
                         )
                     },
@@ -714,7 +708,7 @@ fun AppNavHost(
             }
 
             composable(
-                route = "player/{mediaId}?provider={provider}&type={type}&episodeData={episodeData}&mediaTitle={mediaTitle}&episodeTitle={episodeTitle}&season={season}&episode={episode}",
+                route = "player/{mediaId}?provider={provider}&type={type}&episodeData={episodeData}&mediaTitle={mediaTitle}&episodeTitle={episodeTitle}&season={season}&episode={episode}&year={year}",
                 arguments = listOf(
                     navArgument("mediaId") { type = NavType.StringType },
                     navArgument("provider") { type = NavType.StringType; nullable = true; defaultValue = null },
@@ -722,8 +716,9 @@ fun AppNavHost(
                     navArgument("episodeData") { type = NavType.StringType; nullable = true; defaultValue = null },
                     navArgument("mediaTitle") { type = NavType.StringType; nullable = true; defaultValue = null },
                     navArgument("episodeTitle") { type = NavType.StringType; nullable = true; defaultValue = null },
-                    navArgument("season") { type = NavType.IntType; defaultValue = 0 },
-                    navArgument("episode") { type = NavType.IntType; defaultValue = 0 }
+                    navArgument("season") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("episode") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("year") { type = NavType.IntType; defaultValue = -1 }
                 ),
                 enterTransition = { fadeIn(animationSpec = tween(200)) },
                 exitTransition = { fadeOut(animationSpec = tween(200)) },
@@ -741,10 +736,12 @@ fun AppNavHost(
                 val isTv = type == "TV_SERIES" || type == "ANIME"
                 val rawEpTitle = backStackEntry.arguments?.getString("episodeTitle")
                 val episodeTitle = if (isTv) rawEpTitle?.takeIf { it.isNotBlank() } else null
-                val rawSeason = backStackEntry.arguments?.getInt("season") ?: 0
-                val rawEpisode = backStackEntry.arguments?.getInt("episode") ?: 0
-                val season = if (isTv && rawSeason > 0) rawSeason else null
-                val episode = if (isTv && rawEpisode > 0) rawEpisode else null
+                val rawSeason = backStackEntry.arguments?.getInt("season") ?: -1
+                val rawEpisode = backStackEntry.arguments?.getInt("episode") ?: -1
+                val season = if (isTv && rawSeason >= 0) rawSeason else null
+                val episode = if (isTv && rawEpisode >= 0) rawEpisode else null
+                val rawYear = backStackEntry.arguments?.getInt("year") ?: -1
+                val year = if (rawYear > 0) rawYear else null
 
                 PlayerScreen(
                     mediaId = mediaId,
@@ -755,6 +752,7 @@ fun AppNavHost(
                     episodeTitle = episodeTitle,
                     initialSeason = season,
                     initialEpisode = episode,
+                    initialYear = year,
                     onBack = {
                         val currentEntry = navController.currentBackStackEntry
                         if (currentEntry != null && currentEntry.lifecycle.currentState != Lifecycle.State.RESUMED) {
@@ -1474,8 +1472,9 @@ internal fun buildPlayerRoute(
     episodeData: String? = null,
     mediaTitle: String? = null,
     episodeTitle: String? = null,
-    season: Int = 0,
-    episode: Int = 0
+    season: Int = -1,
+    episode: Int = -1,
+    year: Int? = null
 ): String {
     val safeId = mediaId.trim().ifBlank { "unknown" }
     val encodedMediaId = safeDoubleEncode(safeId)
@@ -1485,5 +1484,6 @@ internal fun buildPlayerRoute(
     val encodedEpData = episodeData?.let { rfc3986Encode(it) } ?: ""
     val encodedTitle = mediaTitle?.let { rfc3986Encode(it) } ?: ""
     val encodedEpTitle = episodeTitle?.let { rfc3986Encode(it) } ?: ""
-    return "player/$encodedMediaId?provider=$encodedProv&type=$typeStr&episodeData=$encodedEpData&mediaTitle=$encodedTitle&episodeTitle=$encodedEpTitle&season=$season&episode=$episode"
+    val yearParam = if (year != null && year > 0) "&year=$year" else ""
+    return "player/$encodedMediaId?provider=$encodedProv&type=$typeStr&episodeData=$encodedEpData&mediaTitle=$encodedTitle&episodeTitle=$encodedEpTitle&season=$season&episode=$episode$yearParam"
 }

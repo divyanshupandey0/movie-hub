@@ -24,12 +24,12 @@ enum class CardScaleMode(
     val verticalFactor: Float,
     val horizontalFactor: Float
 ) {
-    FLAGSHIP("flagship", "Large (Default)", "2.0x Vertical, 1.5x Horizontal cards", 2.0f, 1.5f),
+    FLAGSHIP("flagship", "Large", "2.0x Vertical, 1.5x Horizontal cards", 2.0f, 1.5f),
     BALANCED("balanced", "Balanced", "1.5x Vertical, 1.25x Horizontal cards", 1.5f, 1.25f),
-    COMPACT("compact", "Compact (Original)", "1.0x Vertical, 1.0x Horizontal cards", 1.0f, 1.0f);
+    COMPACT("compact", "Compact (Default)", "1.0x Vertical, 1.0x Horizontal cards", 1.0f, 1.0f);
 
     companion object {
-        fun fromId(id: String?): CardScaleMode = entries.firstOrNull { it.id == id } ?: FLAGSHIP
+        fun fromId(id: String?): CardScaleMode = entries.firstOrNull { it.id == id } ?: COMPACT
     }
 }
 
@@ -91,6 +91,7 @@ class PreferencesRepository private constructor(private val context: Context) {
         val CUSTOM_DOWNLOAD_DIR = stringPreferencesKey("custom_download_dir")
         val FIRST_DOWNLOAD_ALERT_DISMISSED = booleanPreferencesKey("first_download_alert_dismissed")
         val REPOSITORY_URLS = stringSetPreferencesKey("repository_urls")
+        val AUTO_OFFICIAL_REPO_INSTALL = booleanPreferencesKey("auto_official_repo_install")
         val ACTIVE_PROVIDER = stringPreferencesKey("active_provider")
         val DISABLED_PLUGINS = stringSetPreferencesKey("disabled_plugins")
         val EXTRA_CONTENT_ENABLED = booleanPreferencesKey("extra_content_enabled")
@@ -142,6 +143,9 @@ class PreferencesRepository private constructor(private val context: Context) {
         val AMOLED_MODE = booleanPreferencesKey("amoled_mode")
         val SMART_FAILOVER_ENABLED = booleanPreferencesKey("smart_failover_enabled")
         val AUDIO_PASSTHROUGH_ENABLED = booleanPreferencesKey("audio_passthrough_enabled")
+        val PREFERRED_AUDIO_LANGUAGE = stringPreferencesKey("preferred_audio_language")
+        val SECONDARY_AUDIO_LANGUAGE = stringPreferencesKey("secondary_audio_language")
+        val AUTO_SOURCE_SELECTION = booleanPreferencesKey("auto_source_selection")
 
         // 1.4 Application Update Preferences
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
@@ -265,12 +269,20 @@ class PreferencesRepository private constructor(private val context: Context) {
             preferences[PreferencesKeys.REPOSITORY_URLS] ?: emptySet()
         }
 
+    val autoOfficialRepoInstall: Flow<Boolean> = context.preferencesDataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUTO_OFFICIAL_REPO_INSTALL] ?: false
+        }
+
     val activeProvider: Flow<String> = context.preferencesDataStore.data
         .catch { exception ->
             if (exception is IOException) emit(emptyPreferences()) else throw exception
         }
         .map { preferences ->
-            preferences[PreferencesKeys.ACTIVE_PROVIDER] ?: ""
+            preferences[PreferencesKeys.ACTIVE_PROVIDER]?.takeIf { it.isNotBlank() } ?: "Torrentio"
         }
 
     val disabledPlugins: Flow<Set<String>> = context.preferencesDataStore.data
@@ -302,6 +314,7 @@ class PreferencesRepository private constructor(private val context: Context) {
         context.preferencesDataStore.edit { preferences ->
             preferences[PreferencesKeys.CONTENT_REGION_PRESET] = preset.id
         }
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = preset
     }
 
     val cardScaleMode: Flow<CardScaleMode> = context.preferencesDataStore.data
@@ -513,6 +526,12 @@ class PreferencesRepository private constructor(private val context: Context) {
     suspend fun setRepositoryUrls(urls: Set<String>) {
         context.preferencesDataStore.edit { preferences ->
             preferences[PreferencesKeys.REPOSITORY_URLS] = urls
+        }
+    }
+
+    suspend fun setAutoOfficialRepoInstall(enabled: Boolean) {
+        context.preferencesDataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUTO_OFFICIAL_REPO_INSTALL] = enabled
         }
     }
 
@@ -964,13 +983,58 @@ class PreferencesRepository private constructor(private val context: Context) {
             if (exception is IOException) emit(emptyPreferences()) else throw exception
         }
         .map { preferences ->
-            preferences[PreferencesKeys.SMART_FAILOVER_ENABLED] ?: false
+            preferences[PreferencesKeys.SMART_FAILOVER_ENABLED] ?: true
         }
         .distinctUntilChanged()
 
     suspend fun setSmartFailoverEnabled(enabled: Boolean) {
         context.preferencesDataStore.edit { preferences ->
             preferences[PreferencesKeys.SMART_FAILOVER_ENABLED] = enabled
+        }
+    }
+
+    val preferredAudioLanguage: Flow<String> = context.preferencesDataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.PREFERRED_AUDIO_LANGUAGE] ?: "hi"
+        }
+        .distinctUntilChanged()
+
+    suspend fun setPreferredAudioLanguage(lang: String) {
+        context.preferencesDataStore.edit { preferences ->
+            preferences[PreferencesKeys.PREFERRED_AUDIO_LANGUAGE] = lang
+        }
+    }
+
+    val secondaryAudioLanguage: Flow<String> = context.preferencesDataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.SECONDARY_AUDIO_LANGUAGE] ?: "en"
+        }
+        .distinctUntilChanged()
+
+    suspend fun setSecondaryAudioLanguage(lang: String) {
+        context.preferencesDataStore.edit { preferences ->
+            preferences[PreferencesKeys.SECONDARY_AUDIO_LANGUAGE] = lang
+        }
+    }
+
+    val autoSourceSelection: Flow<Boolean> = context.preferencesDataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUTO_SOURCE_SELECTION] ?: true
+        }
+        .distinctUntilChanged()
+
+    suspend fun setAutoSourceSelection(enabled: Boolean) {
+        context.preferencesDataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUTO_SOURCE_SELECTION] = enabled
         }
     }
 
@@ -1484,6 +1548,68 @@ class PreferencesRepository private constructor(private val context: Context) {
                 prefs[PreferencesKeys.DISABLED_PLUGINS] = remoteDisabled
             }
         }
+    }
+
+    suspend fun clearAll() {
+        context.preferencesDataStore.edit { it.clear() }
+    }
+
+    /**
+     * Initializes default appearance settings for new users or unconfigured settings.
+     * Strictly preserves existing user preferences by only writing to keys that do not
+     * already exist in the preferences DataStore.
+     */
+    suspend fun initializeDefaultAppearancePreferences() {
+        try {
+            context.preferencesDataStore.edit { preferences ->
+                if (!preferences.contains(PreferencesKeys.CONTENT_REGION_PRESET)) {
+                    preferences[PreferencesKeys.CONTENT_REGION_PRESET] = ContentRegionPreset.INDIA_ALL.id
+                    com.euthopiar.core.util.TmdbBridge.activeRegionPreset = ContentRegionPreset.INDIA_ALL
+                }
+                if (!preferences.contains(PreferencesKeys.CARD_SCALE_MODE)) {
+                    preferences[PreferencesKeys.CARD_SCALE_MODE] = CardScaleMode.COMPACT.id
+                }
+                if (!preferences.contains(PreferencesKeys.SECTION_LABEL_STYLE)) {
+                    preferences[PreferencesKeys.SECTION_LABEL_STYLE] = SectionLabelStyle.AccentBar.id
+                }
+                if (!preferences.contains(PreferencesKeys.TOP_10_STYLE)) {
+                    preferences[PreferencesKeys.TOP_10_STYLE] = Top10Style.PosterTinted.id
+                }
+                if (!preferences.contains(PreferencesKeys.LONG_PRESS_STYLE)) {
+                    preferences[PreferencesKeys.LONG_PRESS_STYLE] = LongPressSheetStyle.GLASS_MENU.id
+                }
+                if (!preferences.contains(PreferencesKeys.REDUCE_MOTION)) {
+                    preferences[PreferencesKeys.REDUCE_MOTION] = false
+                }
+                if (!preferences.contains(PreferencesKeys.AMOLED_MODE)) {
+                    preferences[PreferencesKeys.AMOLED_MODE] = true
+                }
+                if (!preferences.contains(PreferencesKeys.ACTIVE_PROVIDER)) {
+                    preferences[PreferencesKeys.ACTIVE_PROVIDER] = "Torrentio"
+                }
+                if (!preferences.contains(PreferencesKeys.PREFERRED_AUDIO_LANGUAGE)) {
+                    preferences[PreferencesKeys.PREFERRED_AUDIO_LANGUAGE] = "hi"
+                }
+                if (!preferences.contains(PreferencesKeys.SECONDARY_AUDIO_LANGUAGE)) {
+                    preferences[PreferencesKeys.SECONDARY_AUDIO_LANGUAGE] = "en"
+                }
+                if (!preferences.contains(PreferencesKeys.DEFAULT_QUALITY)) {
+                    preferences[PreferencesKeys.DEFAULT_QUALITY] = "Auto"
+                }
+                if (!preferences.contains(PreferencesKeys.AUTO_SOURCE_SELECTION)) {
+                    preferences[PreferencesKeys.AUTO_SOURCE_SELECTION] = true
+                }
+                if (!preferences.contains(PreferencesKeys.SMART_FAILOVER_ENABLED)) {
+                    preferences[PreferencesKeys.SMART_FAILOVER_ENABLED] = true
+                }
+                if (!preferences.contains(PreferencesKeys.AUTO_OFFICIAL_REPO_INSTALL)) {
+                    preferences[PreferencesKeys.AUTO_OFFICIAL_REPO_INSTALL] = false
+                }
+                if (!preferences.contains(PreferencesKeys.WALKTHROUGH_COMPLETED_VERSION)) {
+                    preferences[PreferencesKeys.WALKTHROUGH_COMPLETED_VERSION] = "1.0.0"
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     companion object {

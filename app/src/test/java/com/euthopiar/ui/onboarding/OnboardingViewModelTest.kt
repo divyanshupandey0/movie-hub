@@ -39,11 +39,13 @@ class OnboardingViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         application = ApplicationProvider.getApplicationContext()
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.GLOBAL
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.INDIA_ALL
     }
 
     @Test

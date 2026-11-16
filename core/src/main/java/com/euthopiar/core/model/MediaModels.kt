@@ -184,7 +184,8 @@ data class StreamSource(
     val drm: DrmConfig? = null,
     val trackers: List<String> = emptyList(),
     val manifestContent: String? = null,
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val mediaId: String? = null
 ) {
     val server: String get() = serverName
     val isM3M8: Boolean get() = isM3u8

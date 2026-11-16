@@ -271,11 +271,11 @@ fun getAllSettingsSearchEntries(): List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         id = "about_euthopiar",
-        title = "About Euthopiar",
+        title = "About MOVIE HUB",
         description = "App version, open-source licenses, GitHub repository and acknowledgments",
         category = SettingsCategory.About,
         page = SettingsPage.About,
-        keywords = listOf("about", "version", "licenses", "github", "euthopiar"),
+        keywords = listOf("about", "version", "licenses", "github", "moviehub", "movie hub", "euthopiar"),
         icon = Icons.Outlined.Info
     ),
     SettingsSearchEntry(
@@ -298,7 +298,7 @@ fun getAllSettingsSearchEntries(): List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         id = "support_euthopiar",
-        title = "Support Euthopiar",
+        title = "Support MOVIE HUB",
         description = "Buy me a coffee and help keep the application free",
         category = SettingsCategory.About,
         page = SettingsPage.About,

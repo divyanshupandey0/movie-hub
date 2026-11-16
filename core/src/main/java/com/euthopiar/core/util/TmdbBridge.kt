@@ -54,7 +54,7 @@ object TmdbBridge {
     private val logoCache = ConcurrentHashMap<String, String>()
     private val enrichedCache = ConcurrentHashMap<String, EnrichedMetadata>()
     private val seasonCache = ConcurrentHashMap<String, Map<Int, EpisodeDetail>>()
-    @Volatile var activeRegionPreset: ContentRegionPreset = ContentRegionPreset.GLOBAL
+    @Volatile var activeRegionPreset: ContentRegionPreset = ContentRegionPreset.INDIA_ALL
     private val cachedHomeCatalog = ConcurrentHashMap<String, Pair<Long, List<CatalogRow>>>()
     private val nowPlayingMovieIds = ConcurrentHashMap.newKeySet<String>()
 
@@ -363,6 +363,7 @@ object TmdbBridge {
                 }
                 if (found != null) {
                     recordIdMapping(found, cleanImdb, isTv)
+                    android.util.Log.d("MovieHubStreaming", "findTmdbIdByImdb: $cleanImdb -> TMDB $found (isTv=$isTv)")
                     return@withContext found
                 }
             }
@@ -1060,17 +1061,25 @@ object TmdbBridge {
                 appendApiKey("$BASE_URL/search/movie?query=$encodedQuery&year=$year", apiKey)
             }
             val id = queryBestTmdbId(client, urlWithYear, hints)
-            if (id != null) return@withContext id
+            if (id != null) {
+                android.util.Log.d("MovieHubStreaming", "searchTmdbId (with year $year): title=$cleanTitle -> $id")
+                return@withContext id
+            }
         }
 
         // 2. Try without year
         val urlWithoutYear = appendApiKey("$BASE_URL/search/$endpoint?query=$encodedQuery", apiKey)
-        val id = queryBestTmdbId(client, urlWithoutYear, hints)
-        if (id != null) return@withContext id
+        val idNoYear = queryBestTmdbId(client, urlWithoutYear, hints)
+        if (idNoYear != null) {
+            android.util.Log.d("MovieHubStreaming", "searchTmdbId (without year): title=$cleanTitle -> $idNoYear")
+            return@withContext idNoYear
+        }
 
         // 3. Fallback: try multi search
         val multiUrl = appendApiKey("$BASE_URL/search/multi?query=$encodedQuery", apiKey)
-        queryBestTmdbId(client, multiUrl, hints)
+        val multiId = queryBestTmdbId(client, multiUrl, hints)
+        android.util.Log.d("MovieHubStreaming", "searchTmdbId (multi search): title=$cleanTitle -> $multiId")
+        multiId
     }
 
     private fun queryBestTmdbId(client: OkHttpClient, url: String, hints: MatchHints): String? {

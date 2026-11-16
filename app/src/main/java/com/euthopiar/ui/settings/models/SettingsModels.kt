@@ -89,7 +89,7 @@ enum class SettingsPage(
     ),
     About(
         route = "settings/about",
-        title = "About Euthopiar",
+        title = "About MOVIE HUB",
         subtitle = "Build info, licenses and project links",
         category = SettingsCategory.About,
         icon = androidx.compose.material.icons.Icons.Outlined.Info
@@ -101,6 +101,9 @@ enum class SettingsPage(
 }
 
 fun SettingsPage.isVisibleFor(profile: UserProfile): Boolean {
+    if (!com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED && this == SettingsPage.Updates) {
+        return false
+    }
     if (profile.isKids) {
         return this != SettingsPage.Integrations &&
                this != SettingsPage.Plugins

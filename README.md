@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:E50914,50:8A0710,100:141414&height=230&section=header&text=EUTHOPIAR&fontSize=76&fontColor=ffffff&fontAlignY=38&desc=Movies%20%C2%B7%20Series%20%C2%B7%20Anime%20%E2%80%94%20one%20beautiful%20app&descAlignY=60&descSize=20&animation=fadeIn" width="100%" alt="Euthopiar banner"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:E50914,50:8A0710,100:141414&height=230&section=header&text=MOVIE%20HUB&fontSize=76&fontColor=ffffff&fontAlignY=38&desc=Movies%20%C2%B7%20Series%20%C2%B7%20Anime%20%E2%80%94%20one%20beautiful%20app&descAlignY=60&descSize=20&animation=fadeIn" width="100%" alt="MOVIE HUB banner"/>
 
-<img src="screenshots/logo.jpg" width="150" alt="Euthopiar logo" style="border-radius:32px"/>
+<img src="screenshots/logo.jpg" width="150" alt="MOVIE HUB logo" style="border-radius:32px"/>
 
 <a href="https://github.com/TheARCreactorGUY/Euthopiar/releases/latest">
   <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=2800&pause=900&color=E50914&center=true&vCenter=true&width=640&lines=Stream+smarter.+Binge+harder.;Netflix-style+UI.+Zero+clutter.;Movies.+Series.+Anime.+One+app.;Plugin+powered+via+Nuvio." alt="Typing animation"/>
@@ -46,9 +46,9 @@
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:E50914,100:141414&height=3&section=header" width="100%" alt="divider"/>
 
-## 🎬 What is Euthopiar?
+## 🎬 What is MOVIE HUB?
 
-> **Euthopiar** is a modern, Netflix-style Android app for discovering and watching **movies, TV series and anime**.
+> **MOVIE HUB** is a modern, Netflix-style Android app for discovering and watching **movies, TV series and anime**.
 > Dark cinematic design. Huge posters. Buttery navigation. Find something to watch in **seconds**, not minutes.
 
 <table>
@@ -267,13 +267,15 @@ Not right now. Android is live, and **Android TV** is next on the list.
 
 > Euthopiar does **not** host or store any media. Content is provided by third-party plugins/sources added by the user. Please respect copyright laws in your country.
 
-> *Euthopiar uses Trakt but is not endorsed or certified by Trakt.*
+> *MOVIE HUB uses Trakt but is not endorsed or certified by Trakt.*
 
 <br/>
 
 ## ☕ Support the Project
 
-Euthopiar is **free and open source**. If you enjoy it, buying me a coffee helps keep the app alive and growing!
+MOVIE HUB is **free and open source**.
+
+**Lead Developer / Maintainer:** AYUSH If you enjoy it, buying me a coffee helps keep the app alive and growing!
 
 <div align="center">
 
@@ -303,6 +305,6 @@ Can't donate? A **star ⭐** is free and helps a ton!
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:141414,50:8A0710,100:E50914&height=140&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20TheARCreactorGUY&fontSize=22&fontColor=ffffff&fontAlignY=70" width="100%" alt="footer"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:141414,50:8A0710,100:E50914&height=140&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20AYUSH&fontSize=22&fontColor=ffffff&fontAlignY=70" width="100%" alt="footer"/>
 
 </div>

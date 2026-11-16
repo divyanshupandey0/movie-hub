@@ -97,7 +97,10 @@ class PluginRepositoryService(
      * Retrieves all installed JavaScript plugins.
      */
     suspend fun getInstalledPlugins(): List<PluginManifest> = withContext(Dispatchers.IO) {
-        storage.scrapersFlow.value.distinctBy { it.id }.map { it.toPluginManifest() }
+        storage.scrapersFlow.value
+            .filterNot { storage.isBlockedScraper(it.id, it.name, it.filename) }
+            .distinctBy { it.id }
+            .map { it.toPluginManifest() }
     }
 
     suspend fun getInstalledPublicPlugins(): List<PluginManifest> = withContext(Dispatchers.IO) {
@@ -109,13 +112,20 @@ class PluginRepositoryService(
      */
     suspend fun fetchRepository(url: String): PluginRepositoryIndex = withContext(Dispatchers.IO) {
         val result = storage.fetchRepositoryManifest(url)
-        if (result.isSuccess) {
-            val repo = result.getOrThrow()
+        val repo = result.getOrNull() ?: storage.getCachedRepoManifest(url)
+        if (repo != null) {
+            val repoName = if (repo.name.isNotBlank() && !repo.name.equals("manifest", ignoreCase = true)) {
+                repo.name
+            } else {
+                com.euthopiar.core.js.inferRepoNameFromUrl(url)
+            }
             return@withContext PluginRepositoryIndex(
-                name = repo.name,
+                name = repoName,
                 description = repo.description ?: "",
                 manifestVersion = 1,
-                plugins = repo.scrapers.map { it.toPluginManifest(url) }
+                plugins = repo.scrapers
+                    .filterNot { storage.isBlockedScraper(it.id, it.name, it.filename) }
+                    .map { it.toPluginManifest(url) }
             )
         }
         getDefaultRepository()
@@ -125,6 +135,9 @@ class PluginRepositoryService(
      * Downloads and installs a provider plugin from a repository manifest.
      */
     suspend fun downloadAndInstallPlugin(manifest: PluginManifest): Boolean = withContext(Dispatchers.IO) {
+        if (storage.isBlockedScraper(manifest.id, manifest.name, manifest.downloadUrl)) {
+            return@withContext false
+        }
         try {
             var dlUrl = manifest.downloadUrl
             if (!dlUrl.isNullOrBlank() && !dlUrl.startsWith("http") && manifest.siteUrl.isNotBlank()) {

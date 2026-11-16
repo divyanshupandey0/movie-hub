@@ -197,7 +197,7 @@ fun AppIgnitionSequence(
                 }
         )
 
-        // Shared Docking Wordmark ("EUTHOPIAR")
+        // Shared Docking Wordmark ("MOVIE HUB")
         // Starts centered with hero presence (1.35x scale) and glides smoothly into TopHeaderBar (1.0x scale)
         // 100% Hardware-accelerated inside graphicsLayer (Zero Recomposition during 60/120fps motion)
         val isNonHome = destinationMode == LaunchDestinationMode.ONBOARDING || destinationMode == LaunchDestinationMode.PIN_LOCK
@@ -250,7 +250,7 @@ fun AppIgnitionSequence(
                 }
         ) {
             Text(
-                text = "EUTHOPIAR",
+                text = "MOVIE HUB",
                 style = AppTypography.titleMedium.copy(
                     fontFamily = AppFontFamily,
                     fontWeight = FontWeight.Medium,

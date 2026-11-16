@@ -378,7 +378,7 @@ object P2pStreamingEngine {
 
             val reqBuilder = Request.Builder()
                 .url(stream.url)
-                .header("User-Agent", "Euthopiar/1.0")
+                .header("User-Agent", "MOVIE-HUB/1.0")
 
             if (existingVerifiedBytes > 0L) {
                 reqBuilder.header("Range", "bytes=$existingVerifiedBytes-")
@@ -431,7 +431,7 @@ object P2pStreamingEngine {
                 val activeResponse = currentResp ?: run {
                     val retryReq = Request.Builder()
                         .url(stream.url)
-                        .header("User-Agent", "Euthopiar/1.0")
+                        .header("User-Agent", "MOVIE-HUB/1.0")
                         .header("Range", "bytes=$bytesReadTotal-")
                         .build()
                     val nextCall = client.newCall(retryReq)

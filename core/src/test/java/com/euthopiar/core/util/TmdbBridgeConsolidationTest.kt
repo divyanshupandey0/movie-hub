@@ -20,6 +20,13 @@ class TmdbBridgeConsolidationTest {
     @Before
     fun setUp() {
         TmdbBridge.clearCachesForTesting()
+        TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.GLOBAL
+    }
+
+    @org.junit.After
+    fun tearDown() {
+        TmdbBridge.clearCachesForTesting()
+        TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.INDIA_ALL
     }
 
     @Test

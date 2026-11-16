@@ -91,10 +91,12 @@ fun RepoPluginsScreen(
         scope.launch {
             isLoadingRepo = true
             loadError = false
-            val cached = providerRepos.find { it.url == repoUrl }
+            val cached = providerRepos.find {
+                it.url.equals(repoUrl, ignoreCase = true) || computeCanonicalRepoId(it.url) == computeCanonicalRepoId(repoUrl)
+            }
             if (cached != null) {
                 repoIndex = PluginRepositoryIndex(
-                    name = cached.name,
+                    name = if (cached.name.isNotBlank() && !cached.name.equals("manifest", ignoreCase = true)) cached.name else com.euthopiar.core.js.inferRepoNameFromUrl(repoUrl),
                     description = cached.description,
                     manifestVersion = 1,
                     plugins = cached.plugins
@@ -105,7 +107,21 @@ fun RepoPluginsScreen(
                 if (fetched != null) {
                     repoIndex = fetched
                 } else {
-                    loadError = true
+                    val installedFromRepo = installedPlugins.filter {
+                        it.siteUrl.trim().equals(repoUrl.trim(), ignoreCase = true) ||
+                        (it.siteUrl.isNotBlank() && computeCanonicalRepoId(it.siteUrl) == computeCanonicalRepoId(repoUrl)) ||
+                        it.id.startsWith(computeCanonicalRepoId(repoUrl) + ":")
+                    }
+                    if (installedFromRepo.isNotEmpty()) {
+                        repoIndex = PluginRepositoryIndex(
+                            name = com.euthopiar.core.js.inferRepoNameFromUrl(repoUrl),
+                            description = "Installed scrapers repository",
+                            manifestVersion = 1,
+                            plugins = installedFromRepo
+                        )
+                    } else {
+                        loadError = true
+                    }
                 }
                 isLoadingRepo = false
             }
@@ -137,7 +153,12 @@ fun RepoPluginsScreen(
     }
 
     val pageBg = if (isAmoled) PluginsGlassTokens.AmoledBackground else PluginsGlassTokens.BaseDarkBackground
-    val repoTitle = repoIndex?.name ?: repoUrl.substringAfterLast("/").substringBefore(".json").ifBlank { "Repository" }
+    val rawTitle = repoIndex?.name
+    val repoTitle = if (!rawTitle.isNullOrBlank() && !rawTitle.equals("manifest", ignoreCase = true)) {
+        rawTitle
+    } else {
+        com.euthopiar.core.js.inferRepoNameFromUrl(repoUrl)
+    }
     val sanitizedUrl = remember(repoUrl) {
         repoUrl.removePrefix("https://").removePrefix("http://")
     }

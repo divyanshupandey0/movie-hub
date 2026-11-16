@@ -8,11 +8,23 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class TopTenRepositoryTest {
+
+    @Before
+    fun setUp() {
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.GLOBAL
+    }
+
+    @After
+    fun tearDown() {
+        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = com.euthopiar.core.model.ContentRegionPreset.INDIA_ALL
+    }
 
     private class FakeTopTenDao : TopTenDao {
         val map = mutableMapOf<String, TopTenEntity>()

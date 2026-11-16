@@ -39,6 +39,22 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
+                    android:scheme="moviehub"
+                    android:host="auth"
+                    android:pathPrefix="/simkl" />
+                <data
+                    android:scheme="MovieHub"
+                    android:host="auth"
+                    android:pathPrefix="/simkl" />
+                <data
+                    android:scheme="moviehub"
+                    android:host="auth"
+                    android:pathPrefix="/trakt" />
+                <data
+                    android:scheme="MovieHub"
+                    android:host="auth"
+                    android:pathPrefix="/trakt" />
+                <data
                     android:scheme="Euthopiar"
                     android:host="auth"
                     android:pathPrefix="/simkl" />

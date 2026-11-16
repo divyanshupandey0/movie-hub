@@ -255,11 +255,13 @@ fun MediaDetailsScreen(
     }
 
     val hasAnyStreamProviders = remember(installedPlugins, addonState.addons) {
-        installedPlugins.any { it.isEnabled } || addonState.addons.any { addon ->
+        val hasEnabledPlugins = installedPlugins.any { it.isEnabled }
+        val hasEnabledAddons = addonState.addons.any { addon ->
             addon.enabled &&
                 addon.manifestUrl != com.euthopiar.core.addons.AddonRepository.DEFAULT_CATALOG_MANIFEST_URL &&
                 addon.manifestUrl != com.euthopiar.core.addons.AddonRepository.DEFAULT_OPENSUBTITLES_MANIFEST_URL
         }
+        hasEnabledPlugins || hasEnabledAddons || addonState.addons.isEmpty()
     }
 
     var isNavigatingAway by remember { mutableStateOf(false) }
@@ -533,7 +535,7 @@ fun MediaDetailsScreen(
                                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                 setType("text/plain")
                                                 putExtra(Intent.EXTRA_SUBJECT, detail.title)
-                                                putExtra(Intent.EXTRA_TEXT, "Watch ${detail.title}$shareYear on Euthopiar")
+                                                putExtra(Intent.EXTRA_TEXT, "Watch ${detail.title}$shareYear on MOVIE HUB")
                                             }
                                             context.startActivity(Intent.createChooser(shareIntent, "Share ${detail.title}"))
                                         },
@@ -869,7 +871,7 @@ fun MediaDetailsScreen(
                                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                     setType("text/plain")
                                                     putExtra(Intent.EXTRA_SUBJECT, detail.title)
-                                                    putExtra(Intent.EXTRA_TEXT, "Watch ${detail.title}$shareYear on Euthopiar")
+                                                    putExtra(Intent.EXTRA_TEXT, "Watch ${detail.title}$shareYear on MOVIE HUB")
                                                 }
                                                 context.startActivity(Intent.createChooser(shareIntent, "Share ${detail.title}"))
                                             },

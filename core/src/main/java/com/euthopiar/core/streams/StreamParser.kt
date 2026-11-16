@@ -50,7 +50,9 @@ object StreamParser {
             val effectiveInfoHash = infoHash ?: crInfoHash
             val effectiveFileIdx = obj.int("fileIdx") ?: crFileIdx
 
-            if (url == null && effectiveInfoHash == null && externalUrl == null && ytId == null && crMagnetUri == null) {
+            if ((url == null && effectiveInfoHash == null && externalUrl == null && ytId == null && crMagnetUri == null) ||
+                (url != null && (url.isBlank() || url.startsWith("about:", ignoreCase = true) || url.startsWith("javascript:", ignoreCase = true)))
+            ) {
                 return@mapNotNull null
             }
 

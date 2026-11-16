@@ -543,9 +543,9 @@ fun SettingsRootScreen(
                     val appVersionCaption = remember(context) {
                         try {
                             val ver = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
-                            "Euthopiar v$ver (Production)"
+                            "MOVIE HUB v$ver (Production)"
                         } catch (_: Exception) {
-                            "Euthopiar (Production)"
+                            "MOVIE HUB (Production)"
                         }
                     }
                     Box(

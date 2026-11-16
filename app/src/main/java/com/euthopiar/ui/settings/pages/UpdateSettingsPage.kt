@@ -149,10 +149,12 @@ fun UpdateSettingsPage(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    val statusHeadline = when (val state = updateState) {
+                    val statusHeadline = if (!com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) {
+                        "Software updates are temporarily disabled"
+                    } else when (val state = updateState) {
                         is UpdateCheckState.Checking -> "Checking for updates..."
                         is UpdateCheckState.UpdateAvailable -> "Update v${state.release.versionName} Available"
-                        is UpdateCheckState.UpToDate -> "Euthopiar is up to date"
+                        is UpdateCheckState.UpToDate -> "MOVIE HUB is up to date"
                         is UpdateCheckState.Error -> "Update check failed"
                         is UpdateCheckState.Idle -> "Current Version: v$currentVersion"
                     }
@@ -212,15 +214,17 @@ fun UpdateSettingsPage(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 SettingsPillButton(
-                    text = if (isChecking) "Checking..." else "Check for Updates",
+                    text = if (!com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) "Updates Disabled" else if (isChecking) "Checking..." else "Check for Updates",
                     onClick = {
-                        scope.launch {
-                            updateManager.checkForUpdates(forceManual = true)
+                        if (com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED) {
+                            scope.launch {
+                                updateManager.checkForUpdates(forceManual = true)
+                            }
                         }
                     },
                     isSolidWhite = updateState !is UpdateCheckState.UpdateAvailable,
                     isLoading = isChecking,
-                    enabled = !isChecking,
+                    enabled = com.euthopiar.data.update.AppUpdateConfig.IS_UPDATE_SYSTEM_ENABLED && !isChecking,
                     hazeState = hazeState,
                     modifier = Modifier.weight(1f)
                 )
@@ -245,7 +249,7 @@ fun UpdateSettingsPage(
 
         OpenSettingsToggleRow(
             title = "Automatic Update Checks",
-            subtitle = "Check GitHub Releases automatically when launching Euthopiar",
+            subtitle = "Check GitHub Releases automatically when launching MOVIE HUB",
             checked = autoCheckUpdates,
             onCheckedChange = { enabled ->
                 scope.launch {

@@ -153,21 +153,8 @@ fun HomeScreen(
         }
     }
 
-    // Automatic update check on app launch
-    LaunchedEffect(autoCheckUpdates) {
-        if (autoCheckUpdates && updateState is UpdateCheckState.Idle) {
-            updateManager.checkForUpdates(forceManual = false)
-        }
-    }
-
-    // Auto-popup update dialog once per app session when update is available and not skipped
-    LaunchedEffect(updateState, skippedUpdateVersion, autoPopupShown) {
-        val available = updateState as? UpdateCheckState.UpdateAvailable
-        if (available != null && !autoPopupShown && available.release.versionName != skippedUpdateVersion) {
-            showUpdateDialog = true
-            updateManager.markAutoPopupShownForSession()
-        }
-    }
+    // Automatic update check temporarily removed/disabled
+    // Auto-popup update dialog temporarily removed/disabled
 
     // Home Donation Reminder Evaluation (New Install first content load, Post-App Update, 24-Hour Cooldown)
     var donationEvaluatedThisSession by rememberSaveable { mutableStateOf(false) }
@@ -214,7 +201,12 @@ fun HomeScreen(
         val isCooldownExpired = (lastPrompt > 0L && (now - lastPrompt >= DonationConfig.COOLDOWN_MS))
         val isClockSkew = (lastPrompt > now)
 
-        if (isNewInstallFirstContent || isPostAppUpdate || isCooldownExpired || isClockSkew) {
+        if (isNewInstallFirstContent) {
+            // First install: start cooldown, do not interrupt the user on first launch
+            preferencesRepository.setLastDonationPromptTimestamp(now)
+            preferencesRepository.setLastAppVersion(currentVersion)
+            donationEvaluatedThisSession = true
+        } else if (isPostAppUpdate || isCooldownExpired || isClockSkew) {
             preferencesRepository.setLastDonationPromptTimestamp(now)
             preferencesRepository.setLastAppVersion(currentVersion)
             showDonationDialog = true
@@ -744,15 +736,10 @@ fun HomeScreen(
                 registry = registry,
                 scrollFraction = { headerScrollFraction },
                 hazeState = if (isPreviewActive) null else homeHazeState,
-                hasUpdateAvailable = updateState is UpdateCheckState.UpdateAvailable,
-                onUpdateBadgeClick = { showUpdateDialog = true }
+                hasUpdateAvailable = false,
+                onUpdateBadgeClick = null
             )
             OfflineBanner()
-            HomeUpdateBanner(
-                hazeState = if (isPreviewActive) null else homeHazeState,
-                onOpenUpdatePopup = { _, _ -> showUpdateDialog = true },
-                onDismiss = { updateManager.dismissBannerForSession() }
-            )
         }
 
     // Long-Press Quick Actions Host (sits on top of blurred hazeSource content)
@@ -806,7 +793,7 @@ fun HomeScreen(
                 val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(android.content.Intent.EXTRA_SUBJECT, item.title)
-                    putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${item.title} on Euthopiar")
+                    putExtra(android.content.Intent.EXTRA_TEXT, "Watch ${item.title} on MOVIE HUB")
                 }
                 context.startActivity(android.content.Intent.createChooser(shareIntent, "Share ${item.title}"))
             },
@@ -887,25 +874,7 @@ fun HomeScreen(
         )
     }
 
-    // Application Update Information Popup
-    if (showUpdateDialog) {
-        val available = updateState as? UpdateCheckState.UpdateAvailable
-        if (available != null) {
-            UpdateInfoDialog(
-                release = available.release,
-                currentVersion = available.currentVersion,
-                downloadState = downloadState,
-                hazeState = homeHazeState,
-                onDismiss = { showUpdateDialog = false },
-                onDownloadAndInstall = { rel -> updateManager.downloadAndInstallUpdate(rel) },
-                onTriggerInstall = { file, fallbackUrl -> updateManager.triggerInstallApk(file, fallbackUrl) },
-                onSkipVersion = { version ->
-                    updateManager.skipVersion(version)
-                    showUpdateDialog = false
-                }
-            )
-        }
-    }
+    // Application Update Information Popup temporarily disabled
 
     // Home Donation Reminder Popup
     if (showDonationDialog && !showUpdateDialog) {

@@ -53,6 +53,10 @@ open class PluginRegistry(
      * it replaces it (enabling dynamic EUP updates).
      */
     fun registerPlugin(plugin: UniversalPlugin) {
+        val pName = plugin.name.lowercase()
+        if (pName.contains("dahmer") || pName.contains("dharma")) {
+            return
+        }
         synchronized(lock) {
             val current = _plugins.value
             val existingIndex = current.indexOfFirst { it.name.equals(plugin.name, ignoreCase = true) }

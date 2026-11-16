@@ -540,7 +540,7 @@ fun StorageSettingsPage(
             onClick = {
                 if (!isExporting && !isImporting) {
                     val timestamp = System.currentTimeMillis() / 1000
-                    exportLauncher.launch("euthopiar_backup_$timestamp.json")
+                    exportLauncher.launch("moviehub_backup_$timestamp.json")
                 }
             },
             trailingContent = {
@@ -624,7 +624,7 @@ fun StorageSettingsPage(
             is BackupUiState.RestoreSuccess -> {
                 EuthopiarGlassDialog(
                     title = "Backup restored",
-                    message = "Configuration has been restored successfully. Restart Euthopiar now to apply all changes.",
+                    message = "Configuration has been restored successfully. Restart MOVIE HUB now to apply all changes.",
                     confirmText = "Restart now",
                     dismissText = "Later",
                     icon = Icons.Outlined.CheckCircleOutline,

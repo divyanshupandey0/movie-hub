@@ -97,8 +97,20 @@ fun PlaybackSettingsPage(
     val hardwareAccel by viewModel.hardwareAcceleration.collectAsState()
     val smartFailover by viewModel.smartFailover.collectAsState()
     val audioPassthrough by viewModel.audioPassthrough.collectAsState()
+    val preferredAudioLanguage by viewModel.preferredAudioLanguage.collectAsState()
 
     var showResetDialog by remember { mutableStateOf(false) }
+
+    val audioLanguageOptions = remember {
+        listOf(
+            PopoverOption("hi", "Hindi", "Plays Hindi dubbed audio track when available"),
+            PopoverOption("en", "English", "Plays original / English audio track"),
+            PopoverOption("es", "Spanish", "Spanish audio track"),
+            PopoverOption("fr", "French", "French audio track"),
+            PopoverOption("de", "German", "German audio track"),
+            PopoverOption("ja", "Japanese", "Japanese original / dubbed track")
+        )
+    }
 
     val qualityOptions = remember {
         listOf(
@@ -256,6 +268,21 @@ fun PlaybackSettingsPage(
             checked = audioPassthrough,
             onCheckedChange = { viewModel.setAudioPassthrough(it) },
             hazeState = hazeState
+        )
+
+        // 6. Preferred Audio Language Row (Dubbed Language Selector)
+        OpenSettingsRow(
+            title = "Preferred audio language",
+            subtitle = "Automatically selects this language (e.g. Hindi Dubbed) when present in movie or TV episode audio tracks",
+            trailingContent = {
+                FrostedGlassDropdown(
+                    options = audioLanguageOptions,
+                    selected = preferredAudioLanguage,
+                    onSelected = { viewModel.setPreferredAudioLanguage(it) },
+                    hazeState = hazeState,
+                    popoverWidth = 240.dp
+                )
+            }
         )
 
         // Section 2: Controls & Automations

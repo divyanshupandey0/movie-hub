@@ -47,29 +47,40 @@ object JsBindings {
                     var episode = args.episode == null ? undefined : args.episode;
                     var effectiveTmdbId = (args.tmdbId && /^\d+${'$'}/.test(args.tmdbId)) ? args.tmdbId : ((args.id && /^\d+${'$'}/.test(args.id)) ? args.id : (args.tmdbId || args.id || args.imdbId));
                     var effectiveType = args.mediaType;
-                    var result;
-                    try {
-                        result = await getStreams(effectiveTmdbId, effectiveType, season, episode, args);
-                    } catch (firstErr) {
+
+                    async function tryFetch(idVal, typeVal) {
+                        if (!idVal) return null;
+                        try {
+                            var r = await getStreams(idVal, typeVal, season, episode, args);
+                            if (Array.isArray(r) && r.length > 0) return r;
+                        } catch (_err) {}
+                        return null;
+                    }
+
+                    var candidateIds = [];
+                    if (effectiveTmdbId) candidateIds.push(effectiveTmdbId);
+                    if (args.imdbId && candidateIds.indexOf(args.imdbId) === -1) candidateIds.push(args.imdbId);
+                    if (args.tmdbId && candidateIds.indexOf(args.tmdbId) === -1) candidateIds.push(args.tmdbId);
+                    if (args.id && candidateIds.indexOf(args.id) === -1) candidateIds.push(args.id);
+
+                    var result = null;
+                    for (var idIdx = 0; idIdx < candidateIds.length; idIdx++) {
+                        var cId = candidateIds[idIdx];
+                        result = await tryFetch(cId, effectiveType);
+                        if (result && result.length > 0) break;
                         if (effectiveType === 'tv' || effectiveType === 'anime') {
                             var fallbackType = (effectiveType === 'tv') ? 'anime' : 'tv';
-                            try {
-                                result = await getStreams(effectiveTmdbId, fallbackType, season, episode, args);
-                            } catch (_fallbackErr) {
-                                throw firstErr;
-                            }
-                        } else {
-                            throw firstErr;
+                            result = await tryFetch(cId, fallbackType);
+                            if (result && result.length > 0) break;
                         }
                     }
-                    if ((!result || (Array.isArray(result) && result.length === 0)) && (effectiveType === 'tv' || effectiveType === 'anime')) {
-                        var fallbackType = (effectiveType === 'tv') ? 'anime' : 'tv';
+
+                    if (!result) {
                         try {
-                            var altResult = await getStreams(effectiveTmdbId, fallbackType, season, episode, args);
-                            if (altResult && Array.isArray(altResult) && altResult.length > 0) {
-                                result = altResult;
-                            }
-                        } catch (_fallbackErr) {}
+                            result = await getStreams(effectiveTmdbId, effectiveType, season, episode, args);
+                        } catch (directErr) {
+                            result = [];
+                        }
                     }
 
                     if (Array.isArray(result)) {

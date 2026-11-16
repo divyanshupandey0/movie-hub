@@ -108,6 +108,7 @@ object PlayerPlaybackNetworking {
 
     data class OriginRequestMetadata(
         val originalHost: String,
+        val originalPort: Int,
         val referer: String?,
         val origin: String?,
         val authorization: String?,
@@ -210,9 +211,9 @@ object PlayerPlaybackNetworking {
             .sslSocketFactory(sslSocketFactory, trustAllManager)
             .hostnameVerifier { _, _ -> true }
             .dns(playbackDns)
-            .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(8, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(35, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
             .retryOnConnectionFailure(true)
@@ -233,6 +234,7 @@ object PlayerPlaybackNetworking {
                         OriginRequestMetadata::class.java,
                         OriginRequestMetadata(
                             originalHost = originalRequest.url.host,
+                            originalPort = originalRequest.url.port,
                             referer = originalRequest.header("Referer"),
                             origin = originalRequest.header("Origin"),
                             authorization = originalRequest.header("Authorization"),
@@ -287,7 +289,9 @@ object PlayerPlaybackNetworking {
                 val request = chain.request()
                 val meta = request.tag(OriginRequestMetadata::class.java)
                 val isPreSigned = isPreSignedStorageUrl(request.url)
-                val isSameHost = meta != null && request.url.host.equals(meta.originalHost, ignoreCase = true)
+                val isSameHost = meta != null &&
+                    request.url.host.equals(meta.originalHost, ignoreCase = true) &&
+                    request.url.port == meta.originalPort
 
                 val builder = request.newBuilder()
                 var modified = false
@@ -300,22 +304,40 @@ object PlayerPlaybackNetworking {
                     }
                 }
 
+                val isStorageHost = request.url.host.lowercase().let { h ->
+                    h.contains("r2.cloudflarestorage.com") ||
+                    h.contains(".r2.dev") ||
+                    h.contains("amazonaws.com") ||
+                    h.contains("storage.googleapis.com") ||
+                    h.contains("blob.core.windows.net") ||
+                    h.contains("digitaloceanspaces.com") ||
+                    h.contains("backblazeb2.com")
+                }
+                val hasAmzStorageSig = request.url.queryParameterNames.any { name ->
+                    val lowerName = name.lowercase()
+                    lowerName.startsWith("x-amz-") || lowerName == "googleaccessid"
+                } || request.url.toString().lowercase().contains("x-amz-signature")
+
                 if (isPreSigned) {
                     if (request.header("Authorization") != null) {
                         builder.removeHeader("Authorization")
                         modified = true
                     }
-                    if (request.header("Cookie") != null) {
+                    if (!isSameHost && request.header("Cookie") != null) {
                         builder.removeHeader("Cookie")
                         modified = true
                     }
-                    if (request.header("Referer") != null) {
-                        builder.removeHeader("Referer")
-                        modified = true
-                    }
-                    if (request.header("Origin") != null) {
-                        builder.removeHeader("Origin")
-                        modified = true
+                    // Only strip Referer and Origin if this is a cross-host redirect to true cloud storage (S3/R2/GCS).
+                    // Never strip Referer or Origin on the primary stream host or standard streaming CDN tokens.
+                    if (!isSameHost && (isStorageHost || hasAmzStorageSig)) {
+                        if (request.header("Referer") != null) {
+                            builder.removeHeader("Referer")
+                            modified = true
+                        }
+                        if (request.header("Origin") != null) {
+                            builder.removeHeader("Origin")
+                            modified = true
+                        }
                     }
                 } else if (isSameHost) {
                     if (request.header("Authorization") == null && meta.authorization != null) {

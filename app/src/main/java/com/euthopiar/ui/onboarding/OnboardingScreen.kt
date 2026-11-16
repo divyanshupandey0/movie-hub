@@ -150,11 +150,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.withContext
 
 /**
- * Redesigned 3-Page First-Launch Onboarding Flow for Euthopiar.
+ * Redesigned 3-Page First-Launch Onboarding Flow for MOVIE HUB.
  *
  * Page 1: Welcome (Edge-to-edge drifting poster collage + manifesto + "Get started" pill)
  * Page 2: Profile Creation (Full-screen Settings profile component)
- * Page 3: Customize (Live preview card + mini navbar + Posters & Appearance segmented controls + "Enter Euthopiar" pill)
+ * Page 3: Customize (Live preview card + mini navbar + Posters & Appearance segmented controls + "Enter MOVIE HUB" pill)
  */
 @Composable
 fun OnboardingScreen(
@@ -172,7 +172,7 @@ fun OnboardingScreen(
     val profileManager = remember { ProfileManager.getInstance(context) }
     val preferencesRepository = remember { PreferencesRepository.getInstance(context) }
 
-    val initialCardScale by preferencesRepository.cardScaleMode.collectAsState(initial = CardScaleMode.FLAGSHIP)
+    val initialCardScale by preferencesRepository.cardScaleMode.collectAsState(initial = CardScaleMode.COMPACT)
     val preferenceAmoled by preferencesRepository.amoledMode.collectAsState(initial = isSystemAmoled)
 
     // Current page: 0 = Welcome, 1 = Profile, 2 = Customize
@@ -189,7 +189,7 @@ fun OnboardingScreen(
     var profilePinHash by remember { mutableStateOf<String?>(null) }
     var profilePlainPin by remember { mutableStateOf<String?>(null) }
 
-    val initialRegionPreset by preferencesRepository.contentRegionPreset.collectAsState(initial = ContentRegionPreset.GLOBAL)
+    val initialRegionPreset by preferencesRepository.contentRegionPreset.collectAsState(initial = ContentRegionPreset.INDIA_ALL)
     var selectedRegionPreset by remember(initialRegionPreset) { mutableStateOf(initialRegionPreset) }
 
     // Page 3: Customize State
@@ -1414,7 +1414,7 @@ private fun OnboardingPage2Profile(
  * - Posters choice block (CardScaleMode segmented control)
  * - Appearance choice block (Dark vs AMOLED segmented control, applies live)
  * - Removed Navigation block
- * - Pinned 52 dp white pill "Enter Euthopiar" with spinner on loading
+ * - Pinned 52 dp white pill "Enter MOVIE HUB" with spinner on loading
  */
 private fun getRegionFlag(preset: ContentRegionPreset): String = getRegionCode(preset)
 
@@ -1922,7 +1922,7 @@ private fun OnboardingPage3Customize(
             }
         }
 
-        // Pinned Bottom Button: "Enter Euthopiar"
+        // Pinned Bottom Button: "Enter MOVIE HUB"
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1940,7 +1940,7 @@ private fun OnboardingPage3Customize(
         ) {
             Box(modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth()) {
                 OnboardingWhitePillButton(
-                    text = "Enter Euthopiar",
+                    text = "Enter MOVIE HUB",
                     isLoading = isSubmitting,
                     onClick = onEnterSanctuary,
                 )
@@ -1961,7 +1961,7 @@ private fun OnboardingLivePreviewCard(
     cardScale: CardScaleMode,
     isAmoled: Boolean,
     hazeState: HazeState,
-    selectedRegionPreset: ContentRegionPreset = ContentRegionPreset.GLOBAL,
+    selectedRegionPreset: ContentRegionPreset = ContentRegionPreset.INDIA_ALL,
     previewItems: List<ShowcasePosterItem> = ShowcaseRowTop.take(5),
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,

@@ -87,7 +87,7 @@ fun AboutSettingsPage(
     }
 
     SettingsScaffold(
-        title = "About Euthopiar",
+        title = "About MOVIE HUB",
         onBack = onBack,
         modifier = modifier,
         overlay = { hazeState ->
@@ -146,7 +146,7 @@ fun AboutSettingsPage(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = "EUTHOPIAR",
+                        text = "MOVIE HUB",
                         style = TextStyle(
                             fontFamily = AppFontFamily,
                             fontWeight = FontWeight.Medium,
@@ -192,7 +192,18 @@ fun AboutSettingsPage(
         OpenSettingsSectionHeader(title = "Community & Source")
 
         OpenSettingsRow(
-            title = "Support Euthopiar",
+            title = "Developer",
+            subtitle = "AYUSH",
+            trailingContent = {
+                SettingsMetadataChip(
+                    text = "Lead Developer",
+                    hazeState = hazeState
+                )
+            }
+        )
+
+        OpenSettingsRow(
+            title = "Support MOVIE HUB",
             subtitle = "Buy me a coffee and help keep the application free",
             onClick = { showSupportSheet = true },
             trailingContent = {
@@ -401,7 +412,7 @@ fun AboutSettingsPage(
                         }
 
                         Text(
-                            text = "Euthopiar is crafted with modern open-source software, licensed under permissive Apache 2.0 and MIT terms:",
+                            text = "MOVIE HUB is crafted with modern open-source software, licensed under permissive Apache 2.0 and MIT terms:",
                             style = TextStyle(
                                 fontFamily = AppFontFamily,
                                 fontWeight = FontWeight.Normal,
@@ -588,7 +599,7 @@ fun AboutSettingsPage(
                         }
 
                         Text(
-                            text = "Euthopiar is built around strict data isolation and user privacy principles:",
+                            text = "MOVIE HUB is built around strict data isolation and user privacy principles:",
                             style = TextStyle(
                                 fontFamily = AppFontFamily,
                                 fontWeight = FontWeight.Normal,

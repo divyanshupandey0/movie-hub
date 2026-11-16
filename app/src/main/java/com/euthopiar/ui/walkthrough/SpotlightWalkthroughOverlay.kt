@@ -338,7 +338,7 @@ fun SpotlightWalkthroughOverlay(
                 stepLabel = "STEP 1 OF 3",
                 categoryTag = "STREAMING ENGINE",
                 title = "Unlock Unlimited Streaming",
-                description = "Welcome to Euthopiar! To watch movies and TV series, let's link your community streaming providers. Tap your Profile to get started.",
+                description = "Welcome to MOVIE HUB! To watch movies and TV series, let's link your community streaming providers. Tap your Profile to get started.",
                 isFinalStep = false
             )
             WalkthroughStep.STEP_2_PLUGINS_TILE -> WalkthroughCardData(

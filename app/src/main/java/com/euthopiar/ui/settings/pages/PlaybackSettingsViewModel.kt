@@ -63,6 +63,9 @@ class PlaybackSettingsViewModel(application: Application) : AndroidViewModel(app
     private val _audioPassthrough = MutableStateFlow(false)
     val audioPassthrough: StateFlow<Boolean> = _audioPassthrough.asStateFlow()
 
+    private val _preferredAudioLanguage = MutableStateFlow("hi")
+    val preferredAudioLanguage: StateFlow<String> = _preferredAudioLanguage.asStateFlow()
+
     init {
         viewModelScope.launch { prefs.defaultQuality.collect { _defaultQuality.value = it } }
         viewModelScope.launch { prefs.autoPlayNextEpisode.collect { _autoPlayNext.value = it } }
@@ -80,6 +83,12 @@ class PlaybackSettingsViewModel(application: Application) : AndroidViewModel(app
         viewModelScope.launch { prefs.hardwareAccelerationEnabled.collect { _hardwareAcceleration.value = it } }
         viewModelScope.launch { prefs.smartFailoverEnabled.collect { _smartFailover.value = it } }
         viewModelScope.launch { prefs.audioPassthroughEnabled.collect { _audioPassthrough.value = it } }
+        viewModelScope.launch { prefs.preferredAudioLanguage.collect { _preferredAudioLanguage.value = it } }
+    }
+
+    fun setPreferredAudioLanguage(lang: String) {
+        _preferredAudioLanguage.value = lang
+        viewModelScope.launch { prefs.setPreferredAudioLanguage(lang) }
     }
 
     fun setDefaultQuality(quality: String) {
