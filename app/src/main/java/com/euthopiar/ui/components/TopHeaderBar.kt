@@ -205,7 +205,7 @@ fun TopHeaderBar(
                         }
                 ) {
                     androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(id = com.euthopiar.R.drawable.ic_moviehub_logo),
+                        painter = androidx.compose.ui.res.painterResource(id = com.moviehub.R.drawable.ic_moviehub_logo),
                         contentDescription = "MOVIE HUB Logo",
                         modifier = Modifier.size(20.dp),
                         contentScale = androidx.compose.ui.layout.ContentScale.Fit

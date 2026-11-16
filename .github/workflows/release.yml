@@ -111,8 +111,8 @@ jobs:
           echo "Actual versionName: $ACTUAL_NAME"
           echo "=================================================="
 
-          if [ "$ACTUAL_PKG" != "com.euthopiar" ]; then
-            echo "::error::Package name mismatch! Expected 'com.euthopiar', but got '$ACTUAL_PKG'."
+          if [ "$ACTUAL_PKG" != "com.moviehub" ] && [ "$ACTUAL_PKG" != "com.euthopiar" ]; then
+            echo "::error::Package name mismatch! Expected 'com.moviehub' (or legacy 'com.euthopiar'), but got '$ACTUAL_PKG'."
             exit 1
           fi
 

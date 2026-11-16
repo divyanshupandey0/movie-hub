@@ -58,7 +58,7 @@ import com.euthopiar.ui.components.VelvetAlertDialog
 import com.euthopiar.ui.components.ErrorState
 import com.euthopiar.ui.util.UserError
 import androidx.compose.ui.res.stringResource
-import com.euthopiar.R
+import com.moviehub.R
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign

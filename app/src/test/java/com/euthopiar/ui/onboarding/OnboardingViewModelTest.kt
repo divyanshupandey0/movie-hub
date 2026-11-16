@@ -192,7 +192,7 @@ class OnboardingViewModelTest {
         assertEquals("Movie", showcaseItem?.genre)
         assertEquals("2026", showcaseItem?.year)
         assertEquals("https://image.tmdb.org/t/p/w780/test.jpg", showcaseItem?.posterUrl)
-        assertEquals(com.euthopiar.R.drawable.avatar_classic_director, showcaseItem?.fallbackDrawableRes)
+        assertEquals(com.moviehub.R.drawable.avatar_classic_director, showcaseItem?.fallbackDrawableRes)
 
         val tvItemWithPoster = com.euthopiar.core.model.MediaItem(
             id = "125",
@@ -203,7 +203,7 @@ class OnboardingViewModelTest {
             year = 2026
         )
         val tvShowcase = tvItemWithPoster.toShowcasePosterItem()
-        assertEquals(com.euthopiar.R.drawable.avatar_retro_cinephile, tvShowcase?.fallbackDrawableRes)
+        assertEquals(com.moviehub.R.drawable.avatar_retro_cinephile, tvShowcase?.fallbackDrawableRes)
 
         val itemWithoutPoster = com.euthopiar.core.model.MediaItem(
             id = "124",

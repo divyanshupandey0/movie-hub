@@ -44,7 +44,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.painterResource
-import com.euthopiar.R
+import com.moviehub.R
 import com.euthopiar.data.local.PlaybackHistoryEntity
 import com.euthopiar.ui.player.subtitles.SubtitlePreset
 import androidx.compose.runtime.Composable

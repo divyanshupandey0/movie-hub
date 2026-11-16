@@ -521,7 +521,7 @@ class AppUpdateManager private constructor(private val context: Context) {
         val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, flags)
             ?: return "Downloaded file is corrupted or not a valid Android APK."
         if (archiveInfo.packageName != context.packageName) {
-            return "Package name mismatch: APK is '${archiveInfo.packageName}', but installed app is '${context.packageName}'."
+            return "Package name mismatch: APK is '${archiveInfo.packageName}', but installed app is '${context.packageName}'. Android creates separate applications for different package identities and cannot update across packages in-place. Install '${archiveInfo.packageName}' directly as a separate application."
         }
         val archiveVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             archiveInfo.longVersionCode.toInt()

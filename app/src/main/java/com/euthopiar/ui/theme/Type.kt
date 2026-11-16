@@ -8,7 +8,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.euthopiar.R
+import com.moviehub.R
 
 val JetBrainsSansFontFamily = FontFamily(
     Font(R.font.jetbrains_sans_regular, FontWeight.Normal),

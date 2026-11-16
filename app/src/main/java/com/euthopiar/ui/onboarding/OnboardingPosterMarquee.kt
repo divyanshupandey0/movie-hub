@@ -59,7 +59,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.request.error
 import coil3.request.fallback
-import com.euthopiar.R
+import com.moviehub.R
 import com.euthopiar.ui.theme.LocalAmoledMode
 import com.euthopiar.ui.theme.LocalReduceMotion
 import kotlin.math.roundToInt
