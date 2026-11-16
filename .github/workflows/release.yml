@@ -121,8 +121,8 @@ jobs:
             exit 1
           fi
 
-          if [ "$ACTUAL_CODE" -le 111 ]; then
-            echo "::error::VersionCode '$ACTUAL_CODE' must be strictly greater than 111 (version 1.1.1). Update app/build.gradle.kts!"
+          if [ "$ACTUAL_CODE" -le 112 ]; then
+            echo "::error::VersionCode '$ACTUAL_CODE' must be strictly greater than 112 (version 1.1.2). Update app/build.gradle.kts!"
             exit 1
           fi
 
