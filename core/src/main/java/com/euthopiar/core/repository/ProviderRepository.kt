@@ -268,6 +268,10 @@ open class ProviderRepository(
             val customDetail = com.euthopiar.core.provider.StreamingSourceManager.getInstance().customStreamProvider.getDetails(mediaItem.id)
             if (customDetail != null) return@withContext customDetail
         }
+        if (mediaItem.id.startsWith("jellyfin:") || targetName?.equals("Jellyfin Media Server", ignoreCase = true) == true) {
+            val jellyDetail = com.euthopiar.core.provider.StreamingSourceManager.getInstance().jellyfinProvider.getDetails(mediaItem.id)
+            if (jellyDetail != null) return@withContext jellyDetail
+        }
 
         val cleanId = mediaItem.id.removePrefix("tmdb:").removePrefix("tmdb/").trim()
         val baseId = cleanId.substringBefore(':').trim()

@@ -33,11 +33,15 @@ class StreamingSourceManagerTest {
     @Test
     fun testDefaultProvidersRegistration() {
         val providers = manager.getProviders()
-        assertTrue("Should have default providers registered", providers.size >= 4)
+        assertTrue("Should have default providers registered", providers.size >= 10)
         assertTrue("Should contain Internet Archive", providers.any { it.id == "internet_archive" })
         assertTrue("Should contain Wikimedia Commons", providers.any { it.id == "wikimedia_commons" })
         assertTrue("Should contain Custom Stream", providers.any { it.id == "custom_stream" })
         assertTrue("Should contain Castle TV", providers.any { it.id == "castle_tv" })
+        assertTrue("Should contain Jellyfin", providers.any { it.id == "jellyfin_media_server" })
+        assertTrue("Should contain VegaMovies CS adapter", providers.any { it.id == "cs_vegamoviesprovider" })
+        assertTrue("Should contain HDhub4u CS adapter", providers.any { it.id == "cs_hdhub4u" })
+        assertTrue("Should contain HiAnime CS adapter", providers.any { it.id == "cs_hianime" })
 
         val castle = providers.first { it.id == "castle_tv" }
         assertFalse("Castle TV should remain disabled by default due to encryption/auth restrictions", castle.isEnabled)
@@ -46,6 +50,54 @@ class StreamingSourceManagerTest {
         val plugins = PluginRegistry.Default.plugins.value
         assertTrue("Internet Archive should be registered as UniversalPlugin", plugins.any { it.name == "Internet Archive" })
         assertTrue("Wikimedia Commons should be registered as UniversalPlugin", plugins.any { it.name == "Wikimedia Commons" })
+    }
+
+    @Test
+    fun testCloudStreamEcosystemCatalog() {
+        val targets = com.euthopiar.core.provider.cloudstream.CloudStreamEcosystemCatalog.AUDITED_TARGET_EXTENSIONS
+        assertEquals(6, targets.size)
+        assertTrue(targets.any { it.id == "cs_castletv" && it.status == com.euthopiar.core.provider.cloudstream.CloudStreamIntegrationStatus.BLOCKED })
+        assertTrue(targets.any { it.id == "cs_vegamovies" && it.status == com.euthopiar.core.provider.cloudstream.CloudStreamIntegrationStatus.BLOCKED })
+        assertTrue(targets.any { it.id == "cs_hdhub4u" && it.status == com.euthopiar.core.provider.cloudstream.CloudStreamIntegrationStatus.BLOCKED })
+        assertTrue(targets.any { it.id == "cs_cricify" && it.status == com.euthopiar.core.provider.cloudstream.CloudStreamIntegrationStatus.BLOCKED })
+        assertTrue(targets.any { it.id == "cs_daddylive" && it.status == com.euthopiar.core.provider.cloudstream.CloudStreamIntegrationStatus.BLOCKED })
+        assertTrue(targets.any { it.id == "cs_hianime" && it.status == com.euthopiar.core.provider.cloudstream.CloudStreamIntegrationStatus.BLOCKED })
+    }
+
+    @Test
+    fun testCloudStreamAdaptersIndependentIsolation() = runBlocking {
+        val vega = manager.getProviders().first { it.id == "cs_vegamoviesprovider" }
+        assertFalse(vega.isEnabled)
+        val health = vega.checkHealth()
+        assertEquals(ProviderStatus.OFFLINE, health.status)
+        assertTrue(health.errorMessage?.contains("Turnstile") == true || health.errorMessage?.contains("Dalvik") == true)
+
+        // Calling search or streams on blocked adapter safely returns empty without crashing
+        val streams = vega.getStreamItems("test_id")
+        assertTrue(streams.isEmpty())
+        val searchResults = vega.search("Test")
+        assertTrue(searchResults.isEmpty())
+    }
+
+    @Test
+    fun testJellyfinMediaServerProvider() = runBlocking {
+        val jellyfin = manager.jellyfinProvider
+        assertFalse(jellyfin.isEnabled)
+
+        // Health check while unconfigured returns DEGRADED
+        val unconfiguredHealth = jellyfin.checkHealth()
+        assertEquals(ProviderStatus.DEGRADED, unconfiguredHealth.status)
+
+        // Configure personal media server
+        jellyfin.configure("http://192.168.1.100:8096", "test_api_key_123", "user_1")
+        assertTrue(jellyfin.isEnabled)
+
+        // Generate direct authorized streams
+        val streams = jellyfin.getStreamItems("item_456", title = "Home Video 2026")
+        assertEquals(2, streams.size)
+        assertTrue(streams.any { it.container == StreamContainer.MP4 && it.url?.contains("stream.mp4") == true })
+        assertTrue(streams.any { it.container == StreamContainer.HLS && it.url?.contains("master.m3u8") == true })
+        assertEquals("test_api_key_123", streams[0].headers["X-Emby-Token"])
     }
 
     @Test

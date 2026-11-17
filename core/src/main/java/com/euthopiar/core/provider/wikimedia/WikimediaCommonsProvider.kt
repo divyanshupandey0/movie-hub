@@ -48,7 +48,7 @@ class WikimediaCommonsProvider(
         try {
             val req = Request.Builder()
                 .url("https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json")
-                .header("User-Agent", "MOVIE-HUB/2.0.1 (Android)")
+                .header("User-Agent", "MOVIE-HUB/2.0.2 (Android)")
                 .build()
             client.newCall(req).execute().use { response ->
                 val latency = System.currentTimeMillis() - start
@@ -89,7 +89,7 @@ class WikimediaCommonsProvider(
         try {
             val request = Request.Builder()
                 .url(searchUrl)
-                .header("User-Agent", "MOVIE-HUB/2.0.1 (Android)")
+                .header("User-Agent", "MOVIE-HUB/2.0.2 (Android)")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -136,7 +136,7 @@ class WikimediaCommonsProvider(
         try {
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MOVIE-HUB/2.0.1 (Android)")
+                .header("User-Agent", "MOVIE-HUB/2.0.2 (Android)")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -223,7 +223,7 @@ class WikimediaCommonsProvider(
         try {
             val request = Request.Builder()
                 .url(infoUrl)
-                .header("User-Agent", "MOVIE-HUB/2.0.1 (Android)")
+                .header("User-Agent", "MOVIE-HUB/2.0.2 (Android)")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -281,7 +281,7 @@ class WikimediaCommonsProvider(
         val searchUrl = "https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=$encoded&srnamespace=6&format=json&srlimit=1"
 
         try {
-            val req = Request.Builder().url(searchUrl).header("User-Agent", "MOVIE-HUB/2.0.1 (Android)").build()
+            val req = Request.Builder().url(searchUrl).header("User-Agent", "MOVIE-HUB/2.0.2 (Android)").build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 val body = resp.body?.string() ?: return@withContext null

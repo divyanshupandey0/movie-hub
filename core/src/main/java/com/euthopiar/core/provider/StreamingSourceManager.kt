@@ -34,6 +34,7 @@ class StreamingSourceManager private constructor() {
     val wikimediaCommonsProvider: WikimediaCommonsProvider by lazy { WikimediaCommonsProvider() }
     val customStreamProvider: CustomStreamProvider by lazy { CustomStreamProvider() }
     val castleTvProvider: com.euthopiar.core.provider.castle.CastleTvProvider by lazy { com.euthopiar.core.provider.castle.CastleTvProvider() }
+    val jellyfinProvider: com.euthopiar.core.provider.media.JellyfinMediaServerProvider by lazy { com.euthopiar.core.provider.media.JellyfinMediaServerProvider() }
 
     init {
         // Register default official and open source providers
@@ -41,6 +42,15 @@ class StreamingSourceManager private constructor() {
         registerProvider(wikimediaCommonsProvider)
         registerProvider(customStreamProvider)
         registerProvider(castleTvProvider)
+        registerProvider(jellyfinProvider)
+
+        // Register audited CloudStream ecosystem provider adapters
+        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.CastleTvCloudStreamAdapter())
+        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.VegaMoviesCloudStreamAdapter())
+        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.HDhub4uCloudStreamAdapter())
+        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.CricifyCloudStreamAdapter())
+        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.DaddyLiveCloudStreamAdapter())
+        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.HiAnimeCloudStreamAdapter())
 
         // Also register with UniversalPlugin registry for catalog and search visibility
         PluginRegistry.Default.registerPlugin(internetArchiveProvider)
