@@ -97,9 +97,22 @@ object StreamsRepository {
             }
         )
 
-        android.util.Log.d("MovieHubStreaming", "StreamsRepository.load: normType=$normType, videoId=$cleanTmdbId, season=$season, episode=$episode, title=$title, year=$year, imdbId=$imdbId, scrapers=${scrapers.size}, addons=${addons.size}")
+        val nativeProviders = try {
+            com.euthopiar.core.provider.StreamingSourceManager.getInstance().getEnabledProviders().filter { provider ->
+                when (normType) {
+                    "movie", "movies" -> provider.supportedTypes.contains(com.euthopiar.core.model.MediaType.MOVIE)
+                    "tv", "series" -> provider.supportedTypes.contains(com.euthopiar.core.model.MediaType.TV_SERIES)
+                    "live", "live_tv", "channel" -> provider.supportedTypes.contains(com.euthopiar.core.model.MediaType.LIVE_TV)
+                    else -> true
+                }
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
 
-        if (scrapers.isEmpty() && addons.isEmpty()) {
+        android.util.Log.d("MovieHubStreaming", "StreamsRepository.load: normType=$normType, videoId=$cleanTmdbId, season=$season, episode=$episode, title=$title, year=$year, imdbId=$imdbId, scrapers=${scrapers.size}, addons=${addons.size}, nativeProviders=${nativeProviders.size}")
+
+        if (scrapers.isEmpty() && addons.isEmpty() && nativeProviders.isEmpty()) {
             _uiState.value = StreamsUiState(
                 requestToken = requestToken,
                 isAnyLoading = false,
@@ -108,11 +121,19 @@ object StreamsRepository {
             return
         }
 
-        // Initialize placeholder loading groups for scrapers and addons
+        // Initialize placeholder loading groups for scrapers, addons, and native providers
         val scraperGroups = scrapers.map { scraper ->
             AddonStreamGroup(
                 addonName = scraper.name,
                 addonId = "plugin:${scraper.id}",
+                streams = emptyList(),
+                isLoading = true
+            )
+        }
+        val nativeGroups = nativeProviders.map { provider ->
+            AddonStreamGroup(
+                addonName = provider.name,
+                addonId = "native:${provider.id}",
                 streams = emptyList(),
                 isLoading = true
             )
@@ -139,7 +160,7 @@ object StreamsRepository {
             it.addonName.contains("MediaFusion", ignoreCase = true) || it.addonId.contains("mediafusion", ignoreCase = true) ||
             it.addonName.contains("Plavio", ignoreCase = true) || it.addonId.contains("plavio", ignoreCase = true)
         }
-        val initialGroups = torrentioGroups + mediafusionGroups + plaviohdGroups + scraperGroups + otherAddonGroups
+        val initialGroups = torrentioGroups + mediafusionGroups + plaviohdGroups + scraperGroups + nativeGroups + otherAddonGroups
 
         _uiState.value = StreamsUiState(
             requestToken = requestToken,
@@ -149,7 +170,7 @@ object StreamsRepository {
         )
 
         activeJob = scope.launch {
-            val totalTasks = scrapers.size + addons.size
+            val totalTasks = scrapers.size + addons.size + nativeProviders.size
             val completions = Channel<StreamLoadCompletion>(capacity = Channel.BUFFERED)
 
             val baseId = if (isLiveTv || isCustomId) cleanTmdbId else cleanTmdbId.substringBefore(':')
@@ -483,6 +504,44 @@ object StreamsRepository {
                                 addonName = addon.displayTitle,
                                 streams = emptyList(),
                                 error = t.localizedMessage ?: "Failed to resolve addon streams"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Concurrently query native authorized and public-domain providers
+            nativeProviders.forEach { provider ->
+                val nativeId = "native:${provider.id}"
+                launch(Dispatchers.IO) {
+                    try {
+                        val resolved = withTimeoutOrNull(20_000L) {
+                            provider.getStreamItems(
+                                mediaId = canonicalTmdbId,
+                                season = season,
+                                episode = episode,
+                                title = effectiveTitle,
+                                year = effectiveYear
+                            )
+                        } ?: emptyList()
+                        android.util.Log.d("MovieHubStreaming", "Native Provider [${provider.name}] delivered ${resolved.size} streams")
+                        completions.trySend(
+                            StreamLoadCompletion.PluginScraper(
+                                addonId = nativeId,
+                                addonName = provider.name,
+                                streams = resolved,
+                                error = null
+                            )
+                        )
+                    } catch (t: Throwable) {
+                        if (t is kotlinx.coroutines.CancellationException) throw t
+                        android.util.Log.e("MovieHubStreaming", "Native provider [${provider.name}] failed: ${t.localizedMessage}", t)
+                        completions.trySend(
+                            StreamLoadCompletion.PluginScraper(
+                                addonId = nativeId,
+                                addonName = provider.name,
+                                streams = emptyList(),
+                                error = t.localizedMessage ?: "Provider query failed"
                             )
                         )
                     }

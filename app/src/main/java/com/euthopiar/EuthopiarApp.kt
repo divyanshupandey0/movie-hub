@@ -35,9 +35,10 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
         DohDns.initHttpCache(cacheDir)
         com.euthopiar.ui.player.sequential.SequentialStreamManager.cleanOrphanedCache(this)
 
-        // Synchronously initialize JsPluginStorage, AddonRepository, and P2P engine instances
+        // Synchronously initialize JsPluginStorage, AddonRepository, P2P engine, and StreamingSourceManager instances
         com.euthopiar.core.js.JsPluginStorage.getInstance(this)
         com.euthopiar.core.addons.AddonRepository.getInstance(this)
+        com.euthopiar.core.provider.StreamingSourceManager.getInstance()
         com.euthopiar.core.p2p.P2pStreamingEngine.initialize(this)
         com.euthopiar.core.p2p.P2pSettingsRepository.initialize(this)
         com.euthopiar.core.browser.HeadlessWebResolver.getInstance(this)
@@ -54,7 +55,9 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
                 "euthopiar-vault.sehgalvansh716.workers.dev",
                 "api.themoviedb.org",
                 "image.tmdb.org",
-                "graphql.anilist.co"
+                "graphql.anilist.co",
+                "archive.org",
+                "commons.wikimedia.org"
             )
 
             try {
