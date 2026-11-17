@@ -19,10 +19,14 @@ import com.euthopiar.data.profile.ProfileManager
 import com.euthopiar.data.repository.PlaylistRepository
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.IOException
@@ -168,51 +172,7 @@ class SupabaseSyncManager private constructor(
                 }
             }
 
-            // Read previous synced user ID BEFORE setSupabaseSession overwrites it
-            val lastUserId = preferencesRepository.supabaseLastSyncedUserId.first()
-
-            val authResult = authClient.signInWithGoogleIdToken(idToken, rawNonce)
-            if (authResult.isFailure) {
-                return@withContext Result.failure(authResult.exceptionOrNull() ?: Exception("Supabase Auth failed"))
-            }
-
-            val session = authResult.getOrThrow()
-            isInitialRestoreInProgress.set(true)
-            try {
-                currentSessionCache = session
-                preferencesRepository.setSupabaseSession(session)
-
-                // Always reset watermarks on fresh sign-in so we pull the complete cloud state
-                preferencesRepository.setSupabasePlaybackWatermark(null)
-                preferencesRepository.setSupabaseWatchlistWatermark(null)
-                preferencesRepository.setSupabasePlaylistsWatermark(null)
-                preferencesRepository.setSupabaseAddonsWatermark(null)
-                preferencesRepository.setSupabaseLastSyncedUserId(session.userId)
-                // Clear any stale pending deletion tombstones so they don't clobber incoming cloud addons
-                val staleDeletions = preferencesRepository.supabasePendingDeletedAddonUrls.first()
-                if (staleDeletions.isNotEmpty()) {
-                    preferencesRepository.clearPendingDeletedAddonUrls(staleDeletions)
-                }
-
-                val account = CloudUserAccount(
-                    userId = session.userId,
-                    email = session.email,
-                    displayName = session.displayName,
-                    avatarUrl = session.avatarUrl,
-                    activeProfileId = profileManager.activeProfileId.value
-                )
-                restClient.upsertAccount(account)
-
-                val isSameOrGuestUser = (lastUserId == null || lastUserId == session.userId)
-                triggerSafeMergeAndSync(
-                    session = session,
-                    mergePreExistingLocal = isSameOrGuestUser
-                )
-            } finally {
-                isInitialRestoreInProgress.set(false)
-            }
-
-            Result.success(session)
+            authenticateFromGoogleToken(idToken, rawNonce)
         } catch (e: Exception) {
             isInitialRestoreInProgress.set(false)
             Log.e(TAG, "Sign in with Google failed", e)
@@ -220,9 +180,87 @@ class SupabaseSyncManager private constructor(
         }
     }
 
+    /**
+     * Bridges an existing Google ID Token into Firebase Authentication and Supabase Synchronization.
+     */
+    suspend fun authenticateFromGoogleToken(
+        idToken: String,
+        rawNonce: String,
+        firebaseUser: FirebaseUser? = null
+    ): Result<SupabaseSession> = withContext(Dispatchers.IO) {
+        // Read previous synced user ID BEFORE setSupabaseSession overwrites it
+        val lastUserId = preferencesRepository.supabaseLastSyncedUserId.first()
+
+        // Authenticate with Firebase Authentication using the Google ID Token if not already authenticated
+        val resolvedFbUser = firebaseUser ?: try {
+            val fbCredential = GoogleAuthProvider.getCredential(idToken, null)
+            val fbAuth = FirebaseAuth.getInstance()
+            val fbResult = fbAuth.signInWithCredential(fbCredential).await()
+            fbResult.user
+        } catch (fe: Exception) {
+            Log.w(TAG, "Firebase sign in warning: ${fe.message}")
+            null
+        }
+
+        val authResult = authClient.signInWithGoogleIdToken(idToken, rawNonce)
+        if (authResult.isFailure && resolvedFbUser == null) {
+            return@withContext Result.failure(authResult.exceptionOrNull() ?: Exception("Authentication failed"))
+        }
+
+        val session = authResult.getOrNull() ?: SupabaseSession(
+            accessToken = idToken,
+            refreshToken = "",
+            expiresIn = 3600L,
+            expiresAtMs = System.currentTimeMillis() + 3600_000L,
+            userId = resolvedFbUser?.uid ?: "user_${System.currentTimeMillis()}",
+            email = resolvedFbUser?.email,
+            displayName = resolvedFbUser?.displayName,
+            avatarUrl = resolvedFbUser?.photoUrl?.toString()
+        )
+        isInitialRestoreInProgress.set(true)
+        try {
+            currentSessionCache = session
+            preferencesRepository.setSupabaseSession(session)
+
+            // Always reset watermarks on fresh sign-in so we pull the complete cloud state
+            preferencesRepository.setSupabasePlaybackWatermark(null)
+            preferencesRepository.setSupabaseWatchlistWatermark(null)
+            preferencesRepository.setSupabasePlaylistsWatermark(null)
+            preferencesRepository.setSupabaseAddonsWatermark(null)
+            preferencesRepository.setSupabaseLastSyncedUserId(session.userId)
+            // Clear any stale pending deletion tombstones so they don't clobber incoming cloud addons
+            val staleDeletions = preferencesRepository.supabasePendingDeletedAddonUrls.first()
+            if (staleDeletions.isNotEmpty()) {
+                preferencesRepository.clearPendingDeletedAddonUrls(staleDeletions)
+            }
+
+            val account = CloudUserAccount(
+                userId = session.userId,
+                email = session.email,
+                displayName = session.displayName,
+                avatarUrl = session.avatarUrl,
+                activeProfileId = profileManager.activeProfileId.value
+            )
+            restClient.upsertAccount(account)
+
+            val isSameOrGuestUser = (lastUserId == null || lastUserId == session.userId)
+            triggerSafeMergeAndSync(
+                session = session,
+                mergePreExistingLocal = isSameOrGuestUser
+            )
+        } finally {
+            isInitialRestoreInProgress.set(false)
+        }
+
+        Result.success(session)
+    }
+
     suspend fun signOut(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             scheduledSyncJob?.cancel()
+            try {
+                com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+            } catch (_: Exception) {}
             val session = currentSessionCache
             if (session != null) {
                 authClient.signOut(session.accessToken)

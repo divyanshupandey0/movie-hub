@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "446316340361",
+    "project_id": "movie-hub-46b34",
+    "storage_bucket": "movie-hub-46b34.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:446316340361:android:8de36e610f2a7e7daed258",
+        "android_client_info": {
+          "package_name": "com.euthopiar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDscL6x5hplvZ3FG87F36VaAN_gY3ODfYE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:446316340361:android:8de36e610f2a7e7daed258",
+        "android_client_info": {
+          "package_name": "com.Euthopiar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDscL6x5hplvZ3FG87F36VaAN_gY3ODfYE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

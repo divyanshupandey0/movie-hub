@@ -657,16 +657,16 @@ class PlayerViewModel(
         val requestedBytes = bufferMb.coerceIn(25, 100) * 1024 * 1024
         val targetBytes = requestedBytes.coerceAtMost(maxRamBytes)
         val bufferScale = bufferMb.coerceIn(25, 100) / 50f
-        val minBufferMs = (20_000 * bufferScale).toInt().coerceIn(10_000, 45_000)
-        val maxBufferMs = (50_000 * bufferScale).toInt().coerceIn(25_000, 100_000)
+        val minBufferMs = (8_000 * bufferScale).toInt().coerceIn(8_000, 30_000)
+        val maxBufferMs = (30_000 * bufferScale).toInt().coerceIn(15_000, 45_000)
 
         val loadControl = DefaultLoadControl.Builder()
             .setTargetBufferBytes(targetBytes)
             .setBufferDurationsMs(
                 /* minBufferMs = */ minBufferMs,
                 /* maxBufferMs = */ maxBufferMs,
-                /* bufferForPlaybackMs = */ 1_500,
-                /* bufferForPlaybackAfterRebufferMs = */ 3_000
+                /* bufferForPlaybackMs = */ 500,
+                /* bufferForPlaybackAfterRebufferMs = */ 1_000
             )
             .setPrioritizeTimeOverSizeThresholds(false)
             .setBackBuffer(15_000, true)
@@ -2075,10 +2075,10 @@ class PlayerViewModel(
                                             playStreamSource(option.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
                                         }
                                     } else if (!hasStartedPlayback) {
-                                        // 450ms readiness window
+                                        // 200ms readiness window for instant auto-play
                                         if (fastStartJob == null || !fastStartJob!!.isActive) {
                                             fastStartJob = viewModelScope.launch {
-                                                delay(450L)
+                                                delay(200L)
                                                 if (isActive && !hasStartedPlayback && sessionToken == currentPlaybackSessionToken.get()) {
                                                     hasStartedPlayback = true
                                                     playbackStartTimestampMs = System.currentTimeMillis()

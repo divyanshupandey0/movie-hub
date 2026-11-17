@@ -22,6 +22,8 @@ object StreamsRepository {
     private val _uiState = MutableStateFlow(StreamsUiState())
     val uiState: StateFlow<StreamsUiState> = _uiState.asStateFlow()
 
+    private val streamCache = object : android.util.LruCache<String, List<AddonStreamGroup>>(30) {}
+
     private var activeJob: Job? = null
     private var activeRequestKey: String? = null
     private var lastLoadedKey: String? = null
@@ -58,6 +60,22 @@ object StreamsRepository {
             (imdbId == null || lastLoadedHadImdb) &&
             (title == null || lastLoadedHadTitle)
         ) {
+            return
+        }
+
+        val cachedGroups = if (!forceRefresh) streamCache.get(requestToken) else null
+        if (cachedGroups != null && cachedGroups.any { it.streams.isNotEmpty() }) {
+            val allCached = cachedGroups.flatMap { it.streams }
+            _uiState.value = StreamsUiState(
+                requestToken = requestToken,
+                groups = cachedGroups,
+                isAnyLoading = false,
+                autoPlayStream = allCached.firstOrNull { it.playableDirectUrl != null },
+                emptyStateReason = null
+            )
+            lastLoadedKey = requestToken
+            lastLoadedHadImdb = !imdbId.isNullOrBlank()
+            lastLoadedHadTitle = !title.isNullOrBlank()
             return
         }
 
@@ -573,6 +591,10 @@ object StreamsRepository {
                         val stillLoading = updatedGroups.any { it.isLoading }
                         val allAvailable = updatedGroups.flatMap { it.streams }
                         val bestAutoPlay = current.autoPlayStream ?: allAvailable.firstOrNull { it.playableDirectUrl != null }
+
+                        if (allAvailable.isNotEmpty()) {
+                            streamCache.put(requestToken, updatedGroups)
+                        }
 
                         current.copy(
                             groups = updatedGroups,
