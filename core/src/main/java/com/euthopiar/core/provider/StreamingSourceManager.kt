@@ -33,12 +33,14 @@ class StreamingSourceManager private constructor() {
     val internetArchiveProvider: InternetArchiveProvider by lazy { InternetArchiveProvider() }
     val wikimediaCommonsProvider: WikimediaCommonsProvider by lazy { WikimediaCommonsProvider() }
     val customStreamProvider: CustomStreamProvider by lazy { CustomStreamProvider() }
+    val castleTvProvider: com.euthopiar.core.provider.castle.CastleTvProvider by lazy { com.euthopiar.core.provider.castle.CastleTvProvider() }
 
     init {
         // Register default official and open source providers
         registerProvider(internetArchiveProvider)
         registerProvider(wikimediaCommonsProvider)
         registerProvider(customStreamProvider)
+        registerProvider(castleTvProvider)
 
         // Also register with UniversalPlugin registry for catalog and search visibility
         PluginRegistry.Default.registerPlugin(internetArchiveProvider)

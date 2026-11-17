@@ -33,10 +33,14 @@ class StreamingSourceManagerTest {
     @Test
     fun testDefaultProvidersRegistration() {
         val providers = manager.getProviders()
-        assertTrue("Should have default providers registered", providers.size >= 3)
+        assertTrue("Should have default providers registered", providers.size >= 4)
         assertTrue("Should contain Internet Archive", providers.any { it.id == "internet_archive" })
         assertTrue("Should contain Wikimedia Commons", providers.any { it.id == "wikimedia_commons" })
         assertTrue("Should contain Custom Stream", providers.any { it.id == "custom_stream" })
+        assertTrue("Should contain Castle TV", providers.any { it.id == "castle_tv" })
+
+        val castle = providers.first { it.id == "castle_tv" }
+        assertFalse("Castle TV should remain disabled by default due to encryption/auth restrictions", castle.isEnabled)
 
         // Check PluginRegistry integration
         val plugins = PluginRegistry.Default.plugins.value
