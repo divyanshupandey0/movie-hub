@@ -832,6 +832,7 @@ class PlayerViewModel(
                     .setAllowVideoNonSeamlessAdaptiveness(true)
                     .setAllowAudioMixedMimeTypeAdaptiveness(true)
                     .setAllowAudioMixedChannelCountAdaptiveness(true)
+                    .setPreferredAudioLanguages("hi", "hin", "ta", "tam", "te", "tel", "ml", "mal", "bn", "ben", "en", "eng")
             )
         }
 
@@ -1466,19 +1467,58 @@ class PlayerViewModel(
         streamSeason: Int? = null,
         streamEpisode: Int? = null,
         targetSeason: Int? = null,
-        targetEpisode: Int? = null
+        targetEpisode: Int? = null,
+        streamTitleOrFilename: String? = null
     ): Boolean {
         if (!streamMediaId.isNullOrBlank() && targetMediaId != null) {
             val cleanStream = streamMediaId.removePrefix("tmdb:").removePrefix("tmdb/").substringBefore(':').trim()
             val cleanTarget = targetMediaId.removePrefix("tmdb:").removePrefix("tmdb/").substringBefore(':').trim()
-            val matchesId = cleanStream == cleanTarget ||
-                    (targetImdbId != null && cleanStream.equals(targetImdbId, ignoreCase = true)) ||
-                    (cleanStream.startsWith("tt") && cleanTarget.all { it.isDigit() })
-            if (!matchesId) return false
+
+            // 1. Strict IMDb ID matching: If cleanStream has an IMDb ID and targetImdbId is known
+            if (cleanStream.startsWith("tt", ignoreCase = true) && !targetImdbId.isNullOrBlank()) {
+                if (!cleanStream.equals(targetImdbId, ignoreCase = true)) {
+                    return false
+                }
+            } else if (cleanStream.startsWith("tt", ignoreCase = true) && cleanTarget.startsWith("tt", ignoreCase = true)) {
+                if (!cleanStream.equals(cleanTarget, ignoreCase = true)) {
+                    return false
+                }
+            } else if (cleanStream.all { it.isDigit() } && cleanTarget.all { it.isDigit() }) {
+                if (cleanStream != cleanTarget) {
+                    return false
+                }
+            }
         }
+
+        // 2. Strict TV Season / Episode contradiction checks:
         if (targetSeason != null && targetEpisode != null && streamSeason != null && streamEpisode != null) {
             if (streamSeason != targetSeason || streamEpisode != targetEpisode) {
                 return false
+            }
+        }
+
+        // 3. Title & filename marker validation (guards against wrong video files)
+        if (!streamTitleOrFilename.isNullOrBlank()) {
+            val titleText = streamTitleOrFilename.trim()
+            val isMovieTarget = _uiState.value.mediaType == com.euthopiar.core.model.MediaType.MOVIE
+
+            // If target is a MOVIE, reject any stream having explicit TV season/episode markers (e.g. S01E02)
+            if (isMovieTarget) {
+                val hasTvMarkers = Regex("""\bS\d{1,2}[\s._-]*E\d{1,3}\b""", RegexOption.IGNORE_CASE).containsMatchIn(titleText) ||
+                        Regex("""\bSeason\s*\d+\b""", RegexOption.IGNORE_CASE).containsMatchIn(titleText)
+                if (hasTvMarkers) return false
+            } else if (targetSeason != null && targetEpisode != null) {
+                // If target is a TV episode, reject explicit SxxExx mismatches found directly in the stream label/filename
+                val seMatch = Regex("""\bS(\d{1,2})[\s._-]*E(\d{1,3})\b""", RegexOption.IGNORE_CASE).find(titleText)
+                if (seMatch != null) {
+                    val foundSeason = seMatch.groupValues[1].toIntOrNull()
+                    val foundEpisode = seMatch.groupValues[2].toIntOrNull()
+                    if (foundSeason != null && foundEpisode != null) {
+                        if (foundSeason != targetSeason || foundEpisode != targetEpisode) {
+                            return false
+                        }
+                    }
+                }
             }
         }
         return true
@@ -1518,7 +1558,8 @@ class PlayerViewModel(
                     streamSeason = src.season,
                     streamEpisode = src.episode,
                     targetSeason = _uiState.value.seasonNumber,
-                    targetEpisode = _uiState.value.episodeNumber
+                    targetEpisode = _uiState.value.episodeNumber,
+                    streamTitleOrFilename = "${src.serverName} ${server.label}"
                 )
                 matchesCurrent && server.id !in failedServerIds && server.healthCategory != ServerHealthCategory.UNWATCHABLE
             }
@@ -2011,7 +2052,8 @@ class PlayerViewModel(
                                         streamSeason = s.season,
                                         streamEpisode = s.episode,
                                         targetSeason = currentSeason,
-                                        targetEpisode = currentEp
+                                        targetEpisode = currentEp,
+                                        streamTitleOrFilename = "${s.serverName} ${s.quality}"
                                     )
                                 ) {
                                     android.util.Log.e("PlayerViewModel", "REJECTING MISMATCHED STREAM: stream mediaId=$sMediaId does not match current target=$currId (imdb=$currentImdbId)")
@@ -2700,7 +2742,8 @@ class PlayerViewModel(
                 streamSeason = source.season,
                 streamEpisode = source.episode,
                 targetSeason = _uiState.value.seasonNumber,
-                targetEpisode = _uiState.value.episodeNumber
+                targetEpisode = _uiState.value.episodeNumber,
+                streamTitleOrFilename = "${source.serverName} ${source.quality}"
             )
         ) {
             android.util.Log.e("PlayerViewModel", "BLOCKED PLAYBACK: stream mediaId=$srcMediaId does not match current target=$currId (imdb=$currentImdbId)")
@@ -5605,11 +5648,16 @@ class PlayerViewModel(
                 val src = server.streamSource
                 val srcMediaId = src.mediaId
                 val currId = currentMediaId
-                val matchesCurrentMovie = srcMediaId.isNullOrBlank() || currId == null || run {
-                    val cleanStreamMediaId = srcMediaId.removePrefix("tmdb:").removePrefix("tmdb/").substringBefore(':').trim()
-                    val cleanTargetMediaId = currId.removePrefix("tmdb:").removePrefix("tmdb/").substringBefore(':').trim()
-                    cleanStreamMediaId == cleanTargetMediaId || cleanStreamMediaId.equals(currentImdbId, ignoreCase = true)
-                }
+                val matchesCurrentMovie = isMatchingStream(
+                    streamMediaId = srcMediaId,
+                    targetMediaId = currId,
+                    targetImdbId = currentImdbId,
+                    streamSeason = src.season,
+                    streamEpisode = src.episode,
+                    targetSeason = _uiState.value.seasonNumber,
+                    targetEpisode = _uiState.value.episodeNumber,
+                    streamTitleOrFilename = "${src.serverName} ${server.label}"
+                )
                 matchesCurrentMovie && server.id !in failedServerIds && server.healthCategory != ServerHealthCategory.UNWATCHABLE
             }
             .sortedByDescending { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) }

@@ -505,7 +505,6 @@ object StreamsRepository {
                             emptyList()
                         }
 
-                        val isCanonicalQuery = perAddonStreamId.startsWith("tt", ignoreCase = true) || perAddonStreamId.startsWith("tmdb:", ignoreCase = true)
                         val shouldBypassMatchScorer = isLiveTv || isCustomId || streamItems.any { it.isLive }
 
                         val verifiedStreams = if (shouldBypassMatchScorer) {
@@ -517,17 +516,8 @@ object StreamsRepository {
                                 }
                             }
                         } else {
-                            val scored = com.euthopiar.core.matcher.MatchScorer.filterAndRankStreams(streamHints, streamItems)
-                            if (scored.isNotEmpty()) {
-                                scored
-                            } else if (isCanonicalQuery) {
-                                streamItems.map { item ->
-                                    val fallbackScore = if (item.matchScore > 0.0) item.matchScore else 0.85
-                                    item.copy(matchScore = fallbackScore)
-                                }
-                            } else {
-                                emptyList()
-                            }
+                            // Strict content verification: never revive streams rejected by MatchScorer
+                            com.euthopiar.core.matcher.MatchScorer.filterAndRankStreams(streamHints, streamItems)
                         }
                         android.util.Log.d("MovieHubStreaming", "Addon [${addon.displayTitle}] delivered ${verifiedStreams.size} verified streams (raw: ${streamItems.size}) for $perAddonStreamId")
 

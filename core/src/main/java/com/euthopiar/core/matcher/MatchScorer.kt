@@ -685,12 +685,13 @@ object MatchScorer {
 
         // 9. Final Score Calculation with Soft-Ranking
         val finalScore = ((maxTitleSim * 0.70) + yearBonus + episodeBonus + sequelPenalty).coerceIn(0.0, 1.0)
-        // Soft-ranking: accept unless title similarity is critically non-matching (< 0.35)
-        // For season packs and episode ranges without explicit episode numbers, require robust title similarity (>= 0.60)
+        // Soft-ranking: accept unless title similarity is critically non-matching (< 0.60)
+        // For season packs, episode ranges, and standalone titles, require robust title similarity (>= 0.60)
+        // to prevent unrelated movies from matching just because they share a release year.
         val isAccepted = if (isRangeMatched || isSeasonPack) {
             maxTitleSim >= 0.60
         } else {
-            maxTitleSim >= 0.35 && finalScore >= 0.35
+            maxTitleSim >= 0.60 && finalScore >= 0.50
         }
         val effectiveScore = if (isRangeMatched || isSeasonPack) {
             if (isAccepted) finalScore.coerceAtLeast(0.80) else finalScore

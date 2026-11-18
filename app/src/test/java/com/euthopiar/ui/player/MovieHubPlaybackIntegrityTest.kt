@@ -656,4 +656,76 @@ class MovieHubPlaybackIntegrityTest {
         assertEquals("https://4khdhub.test/", item.headers["Referer"])
         assertEquals("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", item.headers["User-Agent"])
     }
+
+    /**
+     * Scenario T: Strict Content Identity Validation & Wrong Movie Playback Prevention
+     */
+    @Test
+    fun testScenarioT_StrictContentIdentityValidation() {
+        val targetMovieHints = com.euthopiar.core.model.MatchHints(
+            tmdbId = 550,
+            imdbId = "tt0137523",
+            type = com.euthopiar.core.model.ContentType.MOVIE,
+            titles = setOf("Fight Club"),
+            year = 1999
+        )
+
+        // 1. Stream from completely different movie must be rejected
+        val wrongMovieStream = com.euthopiar.core.streams.StreamItem(
+            name = "Torrentio\n1080p",
+            title = "Gladiator (2000) 1080p BluRay",
+            url = "https://stream.test/gladiator.mp4",
+            addonName = "Torrentio",
+            addonId = "torrentio"
+        )
+        val wrongMovieResult = com.euthopiar.core.matcher.MatchScorer.scoreStream(targetMovieHints, wrongMovieStream)
+        assertFalse("Stream for different movie 'Gladiator' must be rejected for 'Fight Club'", wrongMovieResult.isAccepted)
+
+        // 2. Stream with TV episode markers must be rejected when playing a Movie
+        val tvMarkerStream = com.euthopiar.core.streams.StreamItem(
+            name = "TestScraper",
+            title = "Fight Club S01E01 1080p WEB-DL",
+            url = "https://stream.test/fight_club_s01e01.mp4",
+            addonName = "TestScraper",
+            addonId = "test"
+        )
+        val tvMarkerResult = com.euthopiar.core.matcher.MatchScorer.scoreStream(targetMovieHints, tvMarkerStream)
+        assertFalse("TV series marker stream S01E01 must be rejected when target is a Movie", tvMarkerResult.isAccepted)
+
+        // 3. TV Season/Episode mismatch: Requesting S01E05 must reject S02E05 and S01E08
+        val tvHints = com.euthopiar.core.model.MatchHints(
+            tmdbId = 94605,
+            imdbId = "tt11126994",
+            type = com.euthopiar.core.model.ContentType.TV_SERIES,
+            titles = setOf("Arcane"),
+            year = 2021,
+            season = 1,
+            episode = 5
+        )
+        val wrongSeasonStream = com.euthopiar.core.streams.StreamItem(
+            name = "TestScraper",
+            title = "Arcane S02E05 1080p WEB-DL",
+            url = "https://stream.test/arcane_s02e05.mp4",
+            addonName = "TestScraper",
+            addonId = "test"
+        )
+        val wrongEpStream = com.euthopiar.core.streams.StreamItem(
+            name = "TestScraper",
+            title = "Arcane S01E08 1080p WEB-DL",
+            url = "https://stream.test/arcane_s01e08.mp4",
+            addonName = "TestScraper",
+            addonId = "test"
+        )
+        val correctStream = com.euthopiar.core.streams.StreamItem(
+            name = "TestScraper",
+            title = "Arcane S01E05 1080p WEB-DL",
+            url = "https://stream.test/arcane_s01e05.mp4",
+            addonName = "TestScraper",
+            addonId = "test"
+        )
+
+        assertFalse("Wrong season S02E05 must be rejected for S01E05 request", com.euthopiar.core.matcher.MatchScorer.scoreStream(tvHints, wrongSeasonStream).isAccepted)
+        assertFalse("Wrong episode S01E08 must be rejected for S01E05 request", com.euthopiar.core.matcher.MatchScorer.scoreStream(tvHints, wrongEpStream).isAccepted)
+        assertTrue("Exact match S01E05 must be accepted", com.euthopiar.core.matcher.MatchScorer.scoreStream(tvHints, correctStream).isAccepted)
+    }
 }
