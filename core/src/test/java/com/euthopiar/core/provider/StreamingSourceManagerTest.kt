@@ -33,15 +33,12 @@ class StreamingSourceManagerTest {
     @Test
     fun testDefaultProvidersRegistration() {
         val providers = manager.getProviders()
-        assertTrue("Should have default providers registered", providers.size >= 10)
+        assertTrue("Should have default providers registered", providers.size >= 5)
         assertTrue("Should contain Internet Archive", providers.any { it.id == "internet_archive" })
         assertTrue("Should contain Wikimedia Commons", providers.any { it.id == "wikimedia_commons" })
         assertTrue("Should contain Custom Stream", providers.any { it.id == "custom_stream" })
         assertTrue("Should contain Castle TV", providers.any { it.id == "castle_tv" })
         assertTrue("Should contain Jellyfin", providers.any { it.id == "jellyfin_media_server" })
-        assertTrue("Should contain VegaMovies CS adapter", providers.any { it.id == "cs_vegamoviesprovider" })
-        assertTrue("Should contain HDhub4u CS adapter", providers.any { it.id == "cs_hdhub4u" })
-        assertTrue("Should contain HiAnime CS adapter", providers.any { it.id == "cs_hianime" })
 
         val castle = providers.first { it.id == "castle_tv" }
         assertFalse("Castle TV should remain disabled by default due to encryption/auth restrictions", castle.isEnabled)
@@ -66,7 +63,7 @@ class StreamingSourceManagerTest {
 
     @Test
     fun testCloudStreamAdaptersIndependentIsolation() = runBlocking {
-        val vega = manager.getProviders().first { it.id == "cs_vegamoviesprovider" }
+        val vega = com.euthopiar.core.provider.cloudstream.adapters.VegaMoviesCloudStreamAdapter()
         assertFalse(vega.isEnabled)
         val health = vega.checkHealth()
         assertEquals(ProviderStatus.OFFLINE, health.status)
@@ -216,7 +213,8 @@ class StreamingSourceManagerTest {
             quality = "1080p",
             addonName = "Provider 1",
             addonId = "p1",
-            container = StreamContainer.MP4
+            container = StreamContainer.MP4,
+            matchScore = 0.95
         )
         val backupStream1 = StreamItem(
             name = "Backup 720p HLS Stream",
@@ -224,7 +222,8 @@ class StreamingSourceManagerTest {
             quality = "720p",
             addonName = "Provider 2",
             addonId = "p2",
-            container = StreamContainer.HLS
+            container = StreamContainer.HLS,
+            matchScore = 0.90
         )
         val backupStream2 = StreamItem(
             name = "Backup 480p Stream",
@@ -232,7 +231,8 @@ class StreamingSourceManagerTest {
             quality = "480p",
             addonName = "Provider 3",
             addonId = "p3",
-            container = StreamContainer.MP4
+            container = StreamContainer.MP4,
+            matchScore = 0.85
         )
 
         val allStreams = listOf(failedStream, backupStream1, backupStream2)
@@ -253,6 +253,19 @@ class StreamingSourceManagerTest {
         )
         assertNotNull(fallback2)
         assertEquals("https://example.com/backup_sd.mp4", fallback2?.url)
+
+        // Unverified stream with matchScore < 0.60 should be rejected by selectBestStream
+        val unverifiedStream = StreamItem(
+            name = "Unverified 4K Stream",
+            url = "https://example.com/wrong_title.mp4",
+            quality = "2160p",
+            addonName = "Provider X",
+            addonId = "px",
+            container = StreamContainer.MP4,
+            matchScore = 0.45
+        )
+        val rejectedFallback = manager.selectBestStream(listOf(unverifiedStream))
+        assertNull("Streams with matchScore < 0.60 must not be selected", rejectedFallback)
     }
 
     @Test

@@ -38,25 +38,29 @@ class StreamingSourceManager private constructor() {
     val jellyfinProvider: com.euthopiar.core.provider.media.JellyfinMediaServerProvider by lazy { com.euthopiar.core.provider.media.JellyfinMediaServerProvider() }
 
     init {
-        // Register default official and open source providers
+        // Register default official and authorized streaming source providers
         registerProvider(internetArchiveProvider)
         registerProvider(wikimediaCommonsProvider)
         registerProvider(customStreamProvider)
         registerProvider(castleTvProvider)
         registerProvider(jellyfinProvider)
 
-        // Register audited CloudStream ecosystem provider adapters
-        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.CastleTvCloudStreamAdapter())
-        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.VegaMoviesCloudStreamAdapter())
-        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.HDhub4uCloudStreamAdapter())
-        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.CricifyCloudStreamAdapter())
-        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.DaddyLiveCloudStreamAdapter())
-        registerProvider(com.euthopiar.core.provider.cloudstream.adapters.HiAnimeCloudStreamAdapter())
-
         // Also register with UniversalPlugin registry for catalog and search visibility
         PluginRegistry.Default.registerPlugin(internetArchiveProvider)
         PluginRegistry.Default.registerPlugin(wikimediaCommonsProvider)
     }
+
+    /**
+     * Reference to the dedicated Content Providers system (Catalog, Search, Details).
+     */
+    val contentProviderRegistry: com.euthopiar.core.provider.catalog.ContentProviderRegistry
+        get() = com.euthopiar.core.provider.catalog.ContentProviderRegistry.getInstance()
+
+    /**
+     * Reference to the dedicated Streaming Sources system (Playable Streams).
+     */
+    val streamingSourceRegistry: com.euthopiar.core.provider.source.StreamingSourceRegistry
+        get() = com.euthopiar.core.provider.source.StreamingSourceRegistry.getInstance()
 
     fun registerProvider(provider: StreamingProvider) {
         val existingIndex = providers.indexOfFirst { it.id == provider.id }
@@ -215,12 +219,16 @@ class StreamingSourceManager private constructor() {
 
     /**
      * Selects the highest quality, most reliable stream for immediate playback.
+     * Strictly requires a verified match score >= 0.60 to prevent wrong movie/episode playback.
+     * Returns null if no verified stream exists.
      */
     fun selectBestStream(streams: List<StreamItem>): StreamItem? {
-        val playable = streams.filter { it.playableDirectUrl != null }
-        if (playable.isEmpty()) return streams.firstOrNull()
+        val eligible = streams.filter { stream ->
+            stream.playableDirectUrl != null && stream.matchScore >= 0.60
+        }
+        if (eligible.isEmpty()) return null
 
-        return playable.maxWithOrNull(
+        return eligible.maxWithOrNull(
             compareBy<StreamItem> { stream ->
                 when (stream.quality) {
                     "2160p", "4K" -> 100
