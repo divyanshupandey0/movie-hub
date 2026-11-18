@@ -53,8 +53,8 @@ class OnboardingScreenTest {
         continueNode.performClick()
         composeTestRule.waitForIdle()
 
-        // Page 2: Check Enter Euthopiar
-        val enterNode = composeTestRule.onNodeWithText("Enter Euthopiar")
+        // Page 2: Check Enter MOVIE HUB
+        val enterNode = composeTestRule.onNodeWithText("Enter MOVIE HUB")
         enterNode.assertIsDisplayed()
     }
 }

@@ -17,11 +17,16 @@ import okhttp3.Request
 /**
  * Optional Castle TV provider implementation.
  *
- * Implements strict compliance with audit requirements:
- * - Inspects official endpoints (api.hlowb.com).
- * - Identifies proprietary response encryption and private authorization gating.
- * - Remains disabled by default unless legitimate authorized credentials/decryption are configured.
- * - Accurately reports availability status without fabricating fake responses or bypassing encryption.
+ * Audit Findings & Endpoint Discrepancy Note:
+ * - Root Endpoint (https://api.hlowb.com/): Returns HTTP 404 Not Found (path: "/", error: "Not Found")
+ *   because the backend service has no root route handler.
+ * - Subsystem Handshake Endpoint (https://api.hlowb.com/v0.1/system/getSecurityKey/1?channel=IndiaA&clientType=1&lang=en-US):
+ *   Returns HTTP 200 OK (latency ~432ms) with body `{"code":200,"msg":"OK","data":"ZkpBVG0qa2dmSg=="}`.
+ * - Health Assessment: The HTTP 200 response merely confirms host reachability for the key exchange
+ *   subsystem; it is NOT a working streaming or search API. Content endpoints require private authorization
+ *   and proprietary payload decryption.
+ * - Compliance: Provider remains disabled by default (`isEnabled = false`) until legitimate API access and
+ *   publicly authorized search/extraction are verified.
  */
 class CastleTvProvider(
     private val client: OkHttpClient = DohDns.metadataClient

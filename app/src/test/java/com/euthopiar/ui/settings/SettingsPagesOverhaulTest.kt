@@ -40,7 +40,7 @@ class SettingsPagesOverhaulTest {
         assertEquals("Appearance", SettingsPage.Appearance.title)
         assertEquals("Integrations", SettingsPage.Integrations.title)
         assertEquals("Storage & cache", SettingsPage.Storage.title)
-        assertEquals("About Euthopiar", SettingsPage.About.title)
+        assertEquals("About MOVIE HUB", SettingsPage.About.title)
     }
 
     @Test

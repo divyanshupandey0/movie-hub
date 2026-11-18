@@ -27,6 +27,7 @@ object ExternalPlaybackHelper {
         streamSource: StreamSource,
         title: String,
         playerOption: ExternalPlayerOption = ExternalPlayerOption("system", "System App Chooser", null),
+        resumePositionMs: Long = 0L,
         onError: ((String) -> Unit)? = null
     ): Boolean {
         try {
@@ -46,6 +47,10 @@ object ExternalPlaybackHelper {
 
                 putExtra("title", title)
                 putExtra("video_title", title)
+                if (resumePositionMs > 0L) {
+                    putExtra("position", resumePositionMs.toInt())
+                    putExtra("from_start", false)
+                }
 
                 // Inject HTTP headers for VLC / MX Player / Just Player
                 if (streamSource.headers.isNotEmpty()) {
