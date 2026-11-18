@@ -22,6 +22,7 @@ data class CloudStreamExtensionMetadata(
     val authors: List<String> = emptyList(),
     val description: String? = null,
     val supportedTypes: Set<MediaType> = setOf(MediaType.MOVIE, MediaType.TV_SERIES),
+    val supportedLanguages: List<String> = listOf("hi", "en"),
     val status: CloudStreamIntegrationStatus = CloudStreamIntegrationStatus.NOT_TESTED,
     val statusReason: String = "Audited CloudStream extension"
 )

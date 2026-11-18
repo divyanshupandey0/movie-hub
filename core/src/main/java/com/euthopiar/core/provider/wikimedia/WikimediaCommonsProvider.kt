@@ -35,6 +35,7 @@ class WikimediaCommonsProvider(
     override val isEnabled: Boolean = true
     override val mainUrl: String = "https://commons.wikimedia.org"
     override val supportedTypes: Set<MediaType> = setOf(MediaType.MOVIE)
+    override val supportedLanguages: List<String> = listOf("en", "hi", "multi")
     override val capabilities: ProviderCapabilities = ProviderCapabilities(
         supportsSearch = true,
         supportsDetails = true,

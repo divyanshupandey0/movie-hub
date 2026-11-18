@@ -462,4 +462,105 @@ object PlayerPlaybackNetworking {
                 .forEach { runCatching { it.cancel() } }
         } catch (_: Throwable) {}
     }
+
+    data class StreamValidationResult(
+        val isValid: Boolean,
+        val statusCode: Int = 0,
+        val latencyMs: Long = 0L,
+        val contentType: String? = null,
+        val contentLength: Long? = null,
+        val errorMessage: String? = null,
+        val verifiedAudioLanguages: List<String> = emptyList()
+    )
+
+    /**
+     * Pre-playback source validation: validates URL scheme, headers, token expiration,
+     * accessibility via Range probe, and audio track verification.
+     */
+    suspend fun validateStreamSource(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+        timeoutMs: Long = 4000L
+    ): StreamValidationResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val clean = url.trim()
+        if (clean.isBlank()) {
+            return@withContext StreamValidationResult(isValid = false, errorMessage = "Empty URL")
+        }
+
+        if (clean.startsWith("magnet:", ignoreCase = true) || clean.startsWith("torrent:", ignoreCase = true)) {
+            return@withContext StreamValidationResult(isValid = true, statusCode = 200)
+        }
+
+        if (!clean.startsWith("http://", ignoreCase = true) && !clean.startsWith("https://", ignoreCase = true)) {
+            return@withContext StreamValidationResult(isValid = false, errorMessage = "Unsupported URL scheme")
+        }
+
+        // Check if token expired in URL query param: e.g. exp=1797682419
+        val expMatch = Regex("""[?&](?:exp|expires|token_exp)=([0-9]+)""").find(clean)
+        if (expMatch != null) {
+            val expTimestamp = expMatch.groupValues[1].toLongOrNull()
+            if (expTimestamp != null) {
+                val nowSec = System.currentTimeMillis() / 1000L
+                if (expTimestamp < nowSec) {
+                    return@withContext StreamValidationResult(isValid = false, statusCode = 410, errorMessage = "Expired stream token")
+                }
+            }
+        }
+
+        val start = System.currentTimeMillis()
+        try {
+            val reqBuilder = Request.Builder()
+                .url(clean)
+                .header("Range", "bytes=0-1024")
+            headers.forEach { (k, v) ->
+                if (!k.equals("Range", ignoreCase = true)) reqBuilder.header(k, v)
+            }
+
+            val client = probeHttpClient.newBuilder()
+                .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                .build()
+
+            client.newCall(reqBuilder.build()).execute().use { response ->
+                val duration = System.currentTimeMillis() - start
+                val code = response.code
+                val isSuccess = code in 200..299 || code == 206 || code in 300..308
+                val cType = response.header("Content-Type")
+                val cLen = response.header("Content-Length")?.toLongOrNull()
+
+                if (!isSuccess) {
+                    return@withContext StreamValidationResult(
+                        isValid = false,
+                        statusCode = code,
+                        latencyMs = duration,
+                        errorMessage = "HTTP error $code"
+                    )
+                }
+
+                // If HLS .m3u8, probe audio tracks
+                val verifiedLangs = if (clean.contains(".m3u8", ignoreCase = true) || cType?.contains("mpegurl", ignoreCase = true) == true) {
+                    com.euthopiar.core.streams.AudioLanguageDiscovery.probeHlsAudioTracks(clean, headers)
+                } else if (clean.contains(".mp4", ignoreCase = true) || clean.contains(".mkv", ignoreCase = true)) {
+                    com.euthopiar.core.streams.AudioLanguageDiscovery.probeContainerAudioTracks(clean, headers)
+                } else {
+                    emptyList()
+                }
+
+                StreamValidationResult(
+                    isValid = true,
+                    statusCode = code,
+                    latencyMs = duration,
+                    contentType = cType,
+                    contentLength = cLen,
+                    verifiedAudioLanguages = verifiedLangs
+                )
+            }
+        } catch (e: Exception) {
+            val duration = System.currentTimeMillis() - start
+            StreamValidationResult(
+                isValid = false,
+                latencyMs = duration,
+                errorMessage = e.message ?: "Validation probe failed"
+            )
+        }
+    }
 }

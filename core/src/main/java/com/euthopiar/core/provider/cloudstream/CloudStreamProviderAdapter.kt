@@ -26,6 +26,7 @@ abstract class CloudStreamProviderAdapter(
     override val description: String get() = metadata.description ?: "CloudStream-derived provider"
     override val isEnabled: Boolean get() = metadata.status == CloudStreamIntegrationStatus.PASS
     override val supportedTypes: Set<MediaType> get() = metadata.supportedTypes
+    override val supportedLanguages: List<String> get() = metadata.supportedLanguages
 
     override val capabilities: ProviderCapabilities = ProviderCapabilities(
         supportsSearch = true,

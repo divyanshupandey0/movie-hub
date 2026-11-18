@@ -59,6 +59,12 @@ class AddonRepository private constructor(private val context: Context) {
             userSetName = "Torrentio",
             enabled = true
         )
+        val defaultPlavioHd = ManagedAddon(
+            manifestUrl = DEFAULT_PLAVIOHD_MANIFEST_URL,
+            manifest = DEFAULT_PLAVIOHD_MANIFEST,
+            userSetName = "PlavioHD",
+            enabled = true
+        )
         val defaultMediaFusion = ManagedAddon(
             manifestUrl = DEFAULT_MEDIAFUSION_MANIFEST_URL,
             manifest = DEFAULT_MEDIAFUSION_MANIFEST,
@@ -77,12 +83,17 @@ class AddonRepository private constructor(private val context: Context) {
         )
 
         val initial = if (saved == null) {
-            listOf(defaultTorrentio, defaultMediaFusion, defaultCatalog, defaultSubtitles)
+            listOf(defaultTorrentio, defaultPlavioHd, defaultMediaFusion, defaultCatalog, defaultSubtitles)
         } else {
             val hasTorrentio = saved.any {
                 it.manifestUrl == DEFAULT_TORRENTIO_MANIFEST_URL ||
                 it.manifest?.id == "com.stremio.torrentio.addon" ||
                 it.displayTitle.equals("Torrentio", ignoreCase = true)
+            }
+            val hasPlavioHd = saved.any {
+                it.manifestUrl == DEFAULT_PLAVIOHD_MANIFEST_URL ||
+                it.manifest?.id == "community.plaviohd" ||
+                it.displayTitle.contains("Plavio", ignoreCase = true)
             }
             val hasMediaFusion = saved.any {
                 it.manifestUrl == DEFAULT_MEDIAFUSION_MANIFEST_URL ||
@@ -93,8 +104,20 @@ class AddonRepository private constructor(private val context: Context) {
             if (!hasTorrentio) {
                 list = listOf(defaultTorrentio) + list
             }
+            if (!hasPlavioHd) {
+                val tIdx = list.indexOfFirst {
+                    it.manifestUrl == DEFAULT_TORRENTIO_MANIFEST_URL ||
+                    it.manifest?.id == "com.stremio.torrentio.addon" ||
+                    it.displayTitle.equals("Torrentio", ignoreCase = true)
+                }
+                list = if (tIdx >= 0) {
+                    list.toMutableList().apply { add(tIdx + 1, defaultPlavioHd) }
+                } else {
+                    listOf(defaultPlavioHd) + list
+                }
+            }
             if (!hasMediaFusion) {
-                // Insert MediaFusion right after Torrentio as secondary fallback
+                // Insert MediaFusion right after PlavioHD/Torrentio as secondary fallback
                 val torrentioIndex = list.indexOfFirst {
                     it.manifestUrl == DEFAULT_TORRENTIO_MANIFEST_URL ||
                     it.manifest?.id == "com.stremio.torrentio.addon" ||

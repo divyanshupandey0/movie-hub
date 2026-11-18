@@ -55,23 +55,29 @@ object AudioLanguageDiscovery {
     )
 
     private val iso2ToIso3 = mapOf(
-        "en" to "ENG", "eng" to "ENG",
-        "ja" to "JPN", "jpn" to "JPN",
-        "es" to "SPA", "spa" to "SPA",
-        "hi" to "HIN", "hin" to "HIN",
-        "ta" to "TAM", "tam" to "TAM",
-        "te" to "TEL", "tel" to "TEL",
-        "fr" to "FRA", "fra" to "FRA", "fre" to "FRA",
-        "de" to "GER", "ger" to "GER", "deu" to "GER",
-        "it" to "ITA", "ita" to "ITA",
-        "ko" to "KOR", "kor" to "KOR",
-        "ru" to "RUS", "rus" to "RUS",
-        "pt" to "POR", "por" to "POR",
-        "zh" to "CHI", "chi" to "CHI", "zho" to "CHI",
-        "tr" to "TUR", "tur" to "TUR",
-        "pl" to "POL", "pol" to "POL",
-        "nl" to "DUT", "dut" to "DUT", "nld" to "DUT",
-        "ar" to "ARA", "ara" to "ARA",
+        "en" to "ENG", "eng" to "ENG", "english" to "ENG",
+        "ja" to "JPN", "jpn" to "JPN", "japanese" to "JPN",
+        "es" to "SPA", "spa" to "SPA", "spanish" to "SPA",
+        "hi" to "HIN", "hin" to "HIN", "hindi" to "HIN",
+        "ta" to "TAM", "tam" to "TAM", "tamil" to "TAM",
+        "te" to "TEL", "tel" to "TEL", "telugu" to "TEL",
+        "ml" to "MAL", "mal" to "MAL", "malayalam" to "MAL",
+        "bn" to "BEN", "ben" to "BEN", "bengali" to "BEN", "bangla" to "BEN",
+        "kn" to "KAN", "kan" to "KAN", "kannada" to "KAN",
+        "mr" to "MAR", "mar" to "MAR", "marathi" to "MAR",
+        "gu" to "GUJ", "guj" to "GUJ", "gujarati" to "GUJ",
+        "pa" to "PUN", "pan" to "PUN", "punjabi" to "PUN",
+        "fr" to "FRA", "fra" to "FRA", "fre" to "FRA", "french" to "FRA",
+        "de" to "GER", "ger" to "GER", "deu" to "GER", "german" to "GER",
+        "it" to "ITA", "ita" to "ITA", "italian" to "ITA",
+        "ko" to "KOR", "kor" to "KOR", "korean" to "KOR",
+        "ru" to "RUS", "rus" to "RUS", "russian" to "RUS",
+        "pt" to "POR", "por" to "POR", "portuguese" to "POR",
+        "zh" to "CHI", "chi" to "CHI", "zho" to "CHI", "chinese" to "CHI",
+        "tr" to "TUR", "tur" to "TUR", "turkish" to "TUR",
+        "pl" to "POL", "pol" to "POL", "polish" to "POL",
+        "nl" to "DUT", "dut" to "DUT", "nld" to "DUT", "dutch" to "DUT",
+        "ar" to "ARA", "ara" to "ARA", "arabic" to "ARA",
         "lat" to "LAT"
     )
 
@@ -112,6 +118,24 @@ object AudioLanguageDiscovery {
         }
         if (Regex("""\b(?:TEL|TELUGU)\b""").containsMatchIn(upper)) {
             found.add("TEL")
+        }
+        if (Regex("""\b(?:MAL|MALAYALAM)\b""").containsMatchIn(upper)) {
+            found.add("MAL")
+        }
+        if (Regex("""\b(?:BEN|BENGALI|BANGLA)\b""").containsMatchIn(upper)) {
+            found.add("BEN")
+        }
+        if (Regex("""\b(?:KAN|KANNADA)\b""").containsMatchIn(upper)) {
+            found.add("KAN")
+        }
+        if (Regex("""\b(?:MAR|MARATHI)\b""").containsMatchIn(upper)) {
+            found.add("MAR")
+        }
+        if (Regex("""\b(?:GUJ|GUJARATI)\b""").containsMatchIn(upper)) {
+            found.add("GUJ")
+        }
+        if (Regex("""\b(?:PUN|PUNJABI)\b""").containsMatchIn(upper)) {
+            found.add("PUN")
         }
         if (Regex("""\b(?:ENG|ENGLISH)\b""").containsMatchIn(upper)) {
             found.add("ENG")
@@ -323,6 +347,64 @@ object AudioLanguageDiscovery {
             "$resolutionLabel • $langBadge"
         } else {
             resolutionLabel
+        }
+    }
+
+    /**
+     * Strictly reconciles metadata-discovered languages with media probe verified tracks.
+     * Rule: Never mark a source Hindi based only on its title or website language if the
+     * verified container or playlist audio tracks contradict it.
+     */
+    fun reconcileAudioLanguages(
+        metadataLanguages: List<String>,
+        verifiedAudioTracks: List<String>
+    ): List<String> {
+        if (verifiedAudioTracks.isEmpty()) {
+            return metadataLanguages
+        }
+        val verifiedUpper = verifiedAudioTracks.map { it.uppercase().trim() }
+        val filtered = metadataLanguages.filterNot { it == "HIN" && !verifiedUpper.contains("HIN") }
+        return (verifiedUpper + filtered).distinct()
+    }
+
+    /**
+     * Language Priority Score (Hindi-First Architecture):
+     * Priority:
+     * 1. Hindi (verified audio tracks get highest priority, e.g. 1000)
+     * 2. English (e.g. 700)
+     * 3. Tamil (e.g. 600)
+     * 4. Telugu (e.g. 550)
+     * 5. Malayalam (e.g. 500)
+     * 6. Bengali (e.g. 450)
+     * 7. Other languages (e.g. 100)
+     */
+    fun getLanguagePriorityScore(
+        languages: List<String>,
+        verifiedLanguages: List<String> = emptyList()
+    ): Int {
+        val effective = reconcileAudioLanguages(languages, verifiedLanguages)
+        val hasVerifiedHindi = verifiedLanguages.contains("HIN")
+        val hasHindi = effective.contains("HIN")
+        val hasEnglish = effective.contains("ENG")
+        val hasTamil = effective.contains("TAM")
+        val hasTelugu = effective.contains("TEL")
+        val hasMalayalam = effective.contains("MAL")
+        val hasBengali = effective.contains("BEN")
+        val isMulti = effective.contains("MULTI") || effective.contains("DUAL")
+
+        return when {
+            hasVerifiedHindi && (hasEnglish || isMulti) -> 1000
+            hasVerifiedHindi -> 950
+            hasHindi && (hasEnglish || isMulti) -> 900
+            hasHindi -> 850
+            hasEnglish && (hasTamil || hasTelugu || isMulti) -> 750
+            hasEnglish -> 700
+            hasTamil -> 600
+            hasTelugu -> 550
+            hasMalayalam -> 500
+            hasBengali -> 450
+            isMulti -> 400
+            else -> 100
         }
     }
 }

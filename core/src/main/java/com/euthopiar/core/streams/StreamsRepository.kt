@@ -447,6 +447,7 @@ object StreamsRepository {
                 }
 
                 launch(Dispatchers.IO) {
+                    val startReqTime = System.currentTimeMillis()
                     try {
                         val url = com.euthopiar.core.addons.buildAddonResourceUrl(
                             manifestUrl = addon.manifestUrl,
@@ -455,13 +456,38 @@ object StreamsRepository {
                             id = perAddonStreamId,
                             extraPathSegment = null
                         )
-                        val response = com.euthopiar.core.js.network.httpRequestRaw("GET", url, emptyMap(), "", followRedirects = true)
+                        val response = withTimeoutOrNull(15_000L) {
+                            com.euthopiar.core.js.network.httpRequestRaw("GET", url, emptyMap(), "", followRedirects = true)
+                        }
+                        val duration = System.currentTimeMillis() - startReqTime
+
+                        if (response == null) {
+                            com.euthopiar.core.provider.StreamingSourceManager.getInstance().recordRequestOutcome(addonId, duration, false, "Request timed out (15s)")
+                            completions.trySend(
+                                StreamLoadCompletion.PluginScraper(
+                                    addonId = addonId,
+                                    addonName = addon.displayTitle,
+                                    streams = emptyList(),
+                                    error = "Request timed out"
+                                )
+                            )
+                            return@launch
+                        }
+
+                        val isSuccess = response.status in 200..299
+                        com.euthopiar.core.provider.StreamingSourceManager.getInstance().recordRequestOutcome(
+                            addonId,
+                            duration,
+                            isSuccess,
+                            if (!isSuccess) "HTTP ${response.status}" else null
+                        )
+
                         android.util.Log.d(
                             "MovieHubStreaming",
                             "Series/Movie Addon Request: Addon=[${addon.displayTitle}], URL=$url, HTTP=${response.status}, TMDB=$cleanTmdbId, IMDb=$effectiveImdbId, Type=$targetType, Season=$season, Episode=$episode, Title='$effectiveTitle'"
                         )
 
-                        val streamItems = if (response.status in 200..299 && response.body.isNotBlank()) {
+                        val streamItems = if (isSuccess && response.body.isNotBlank()) {
                             try {
                                 StreamParser.parse(
                                     payload = response.body,
@@ -532,8 +558,9 @@ object StreamsRepository {
             nativeProviders.forEach { provider ->
                 val nativeId = "native:${provider.id}"
                 launch(Dispatchers.IO) {
+                    val startNativeTime = System.currentTimeMillis()
                     try {
-                        val resolved = withTimeoutOrNull(20_000L) {
+                        val resolved = withTimeoutOrNull(15_000L) {
                             provider.getStreamItems(
                                 mediaId = canonicalTmdbId,
                                 season = season,
@@ -542,7 +569,9 @@ object StreamsRepository {
                                 year = effectiveYear
                             )
                         } ?: emptyList()
-                        android.util.Log.d("MovieHubStreaming", "Native Provider [${provider.name}] delivered ${resolved.size} streams")
+                        val duration = System.currentTimeMillis() - startNativeTime
+                        com.euthopiar.core.provider.StreamingSourceManager.getInstance().recordRequestOutcome(nativeId, duration, true)
+                        android.util.Log.d("MovieHubStreaming", "Native Provider [${provider.name}] delivered ${resolved.size} streams in ${duration}ms")
                         completions.trySend(
                             StreamLoadCompletion.PluginScraper(
                                 addonId = nativeId,
@@ -553,6 +582,8 @@ object StreamsRepository {
                         )
                     } catch (t: Throwable) {
                         if (t is kotlinx.coroutines.CancellationException) throw t
+                        val duration = System.currentTimeMillis() - startNativeTime
+                        com.euthopiar.core.provider.StreamingSourceManager.getInstance().recordRequestOutcome(nativeId, duration, false, t.localizedMessage)
                         android.util.Log.e("MovieHubStreaming", "Native provider [${provider.name}] failed: ${t.localizedMessage}", t)
                         completions.trySend(
                             StreamLoadCompletion.PluginScraper(
@@ -576,9 +607,9 @@ object StreamsRepository {
                                 group
                             } else {
                                 val mergedStreams = if (isLiveTv || isCustomId) {
-                                    (group.streams + completion.streams)
+                                    (group.streams + completion.streams).deduplicated()
                                 } else {
-                                    (group.streams + completion.streams).sortedForGroupedDisplay()
+                                    (group.streams + completion.streams).deduplicated().sortedForGroupedDisplay()
                                 }
                                 group.copy(
                                     streams = mergedStreams,

@@ -120,7 +120,9 @@ fun PluginRuntimeResult.toStreamItem(
 
 fun List<StreamItem>.sortedForGroupedDisplay(): List<StreamItem> =
     sortedWith(
-        compareBy<StreamItem> { item ->
+        compareByDescending<StreamItem> { item ->
+            AudioLanguageDiscovery.getLanguagePriorityScore(item.audioLanguages, item.verifiedAudioLanguages)
+        }.thenBy { item ->
             val q = item.quality?.lowercase() ?: ""
             when {
                 q.contains("4k") || q.contains("2160") -> 0

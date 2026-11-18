@@ -32,6 +32,7 @@ data class StreamItem(
     val peers: Int? = null,
     val isCached: Boolean = false,
     val audioLanguages: List<String> = emptyList(),
+    val verifiedAudioLanguages: List<String> = emptyList(),
     val matchScore: Double = 0.0,
     val filename: String? = null,
     val container: StreamContainer = StreamContainer.AUTO,
@@ -177,6 +178,17 @@ data class StreamsUiState(
 
     val hasAnyStreams: Boolean
         get() = groups.any { it.streams.isNotEmpty() }
+}
+
+fun List<StreamItem>.deduplicated(): List<StreamItem> {
+    val seen = HashSet<String>()
+    return filter { item ->
+        val key = item.playableDirectUrl?.substringBefore('?')
+            ?: item.effectiveInfoHash
+            ?: item.filename
+            ?: "${item.name}_${item.size}"
+        seen.add(key)
+    }
 }
 
 internal sealed interface StreamLoadCompletion {

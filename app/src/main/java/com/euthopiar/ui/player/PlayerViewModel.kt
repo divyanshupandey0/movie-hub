@@ -4048,32 +4048,47 @@ class PlayerViewModel(
             }
         }
 
-        // 4. Preferred Audio Language Tier (Hindi default, English secondary)
+        // 4. Preferred Audio Language Tier (Hindi-First Priority: HIN -> ENG -> TAM -> TEL -> MAL -> BEN)
         val combinedLangText = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
-        val hasHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) } ||
-                combinedLangText.contains("hindi") || combinedLangText.contains("hin") ||
-                (option.audioBadge?.contains("HIN", true) == true)
+        val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
+        val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
+        // Strictly never mark a source Hindi based only on its title if verified audio exists and contradicts it
+        val hasHindi = if (hasVerifiedNonHindiOnly) false else (hasVerifiedHindi || combinedLangText.contains("hindi") || combinedLangText.contains("hin") || (option.audioBadge?.contains("HIN", true) == true))
+
         val hasEnglish = src.audioTracks.any { it.isoCode.equals("en", true) || it.languageName.contains("english", true) } ||
-                combinedLangText.contains("english") || combinedLangText.contains("eng") ||
-                (option.audioBadge?.contains("ENG", true) == true)
+                combinedLangText.contains("english") || combinedLangText.contains("eng") || (option.audioBadge?.contains("ENG", true) == true)
+        val hasTamil = src.audioTracks.any { it.isoCode.equals("ta", true) || it.languageName.contains("tamil", true) } ||
+                combinedLangText.contains("tamil") || combinedLangText.contains("tam") || (option.audioBadge?.contains("TAM", true) == true)
+        val hasTelugu = src.audioTracks.any { it.isoCode.equals("te", true) || it.languageName.contains("telugu", true) } ||
+                combinedLangText.contains("telugu") || combinedLangText.contains("tel") || (option.audioBadge?.contains("TEL", true) == true)
+        val hasMalayalam = src.audioTracks.any { it.isoCode.equals("ml", true) || it.languageName.contains("malayalam", true) } ||
+                combinedLangText.contains("malayalam") || combinedLangText.contains("mal") || (option.audioBadge?.contains("MAL", true) == true)
+        val hasBengali = src.audioTracks.any { it.isoCode.equals("bn", true) || it.languageName.contains("bengali", true) } ||
+                combinedLangText.contains("bengali") || combinedLangText.contains("ben") || (option.audioBadge?.contains("BEN", true) == true)
         val isMultiOrDual = combinedLangText.contains("dual") || combinedLangText.contains("multi")
 
-        val prefLang = userPreferredAudioLanguage.ifBlank { "hi" }
-        val secLang = userSecondaryAudioLanguage.ifBlank { "en" }
-
-        if (prefLang.equals("hi", true) || prefLang.contains("hin", true)) {
-            if (hasHindi && (hasEnglish || isMultiOrDual)) {
-                score += 220.0
-            } else if (hasHindi) {
-                score += 180.0
-            } else if (hasEnglish || isMultiOrDual) {
-                score += 90.0
-            }
-        } else {
-            val hasPrimary = combinedLangText.contains(prefLang) || src.audioTracks.any { it.isoCode.equals(prefLang, true) }
-            val hasSec = combinedLangText.contains(secLang) || src.audioTracks.any { it.isoCode.equals(secLang, true) }
-            if (hasPrimary) score += 180.0
-            else if (hasSec || isMultiOrDual) score += 90.0
+        if (hasVerifiedHindi && (hasEnglish || isMultiOrDual)) {
+            score += 350.0 // Top priority: Verified Hindi Dual/Multi
+        } else if (hasVerifiedHindi) {
+            score += 300.0 // Verified Hindi audio track
+        } else if (hasHindi && (hasEnglish || isMultiOrDual)) {
+            score += 240.0 // Metadata Hindi Dual/Multi
+        } else if (hasHindi) {
+            score += 200.0 // Metadata Hindi
+        } else if (hasEnglish && isMultiOrDual) {
+            score += 160.0
+        } else if (hasEnglish) {
+            score += 140.0 // English
+        } else if (hasTamil) {
+            score += 120.0 // Tamil
+        } else if (hasTelugu) {
+            score += 110.0 // Telugu
+        } else if (hasMalayalam) {
+            score += 100.0 // Malayalam
+        } else if (hasBengali) {
+            score += 90.0  // Bengali
+        } else if (isMultiOrDual) {
+            score += 80.0
         }
 
         // 5. Resolution & Codec Compatibility Tier

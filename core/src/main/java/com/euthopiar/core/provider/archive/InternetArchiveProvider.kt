@@ -37,6 +37,7 @@ class InternetArchiveProvider(
     override val isEnabled: Boolean = true
     override val mainUrl: String = "https://archive.org"
     override val supportedTypes: Set<MediaType> = setOf(MediaType.MOVIE)
+    override val supportedLanguages: List<String> = listOf("en", "hi", "es", "fr", "de")
     override val capabilities: ProviderCapabilities = ProviderCapabilities(
         supportsSearch = true,
         supportsDetails = true,

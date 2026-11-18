@@ -34,6 +34,7 @@ class CustomStreamProvider : StreamingProvider {
     override val description: String = "User-supplied and licensed direct HLS/DASH/MP4 streams"
     override val isEnabled: Boolean = true
     override val supportedTypes: Set<MediaType> = setOf(MediaType.MOVIE, MediaType.TV_SERIES, MediaType.LIVE_TV)
+    override val supportedLanguages: List<String> = listOf("hi", "en", "ta", "te", "ml", "bn", "multi")
     override val capabilities: ProviderCapabilities = ProviderCapabilities(
         supportsSearch = true,
         supportsDetails = true,

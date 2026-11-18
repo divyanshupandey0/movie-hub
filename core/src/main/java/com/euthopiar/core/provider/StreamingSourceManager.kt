@@ -28,6 +28,7 @@ class StreamingSourceManager private constructor() {
 
     private val providers = CopyOnWriteArrayList<StreamingProvider>()
     private val disabledProviderIds = ConcurrentHashMap.newKeySet<String>()
+    private val statsMap = ConcurrentHashMap<String, ProviderStats>()
 
     val metadataManager: StreamingMetadataManager by lazy { StreamingMetadataManager.getInstance() }
     val internetArchiveProvider: InternetArchiveProvider by lazy { InternetArchiveProvider() }
@@ -87,6 +88,60 @@ class StreamingSourceManager private constructor() {
         } else {
             disabledProviderIds.add(id)
         }
+    }
+
+    fun recordRequestOutcome(
+        providerId: String,
+        durationMs: Long,
+        isSuccess: Boolean,
+        errorMessage: String? = null
+    ) {
+        val provider = providers.find { it.id == providerId }
+        val name = provider?.name ?: providerId
+        val languages = provider?.supportedLanguages ?: listOf("en")
+        val enabled = isProviderEnabled(providerId)
+
+        statsMap.compute(providerId) { _, current ->
+            val prev = current ?: ProviderStats(
+                providerId = providerId,
+                name = name,
+                enabled = enabled,
+                supportedLanguages = languages
+            )
+            val total = prev.totalRequests + 1
+            val successful = if (isSuccess) prev.successfulRequests + 1 else prev.successfulRequests
+            val newAvg = if (prev.totalRequests == 0L) durationMs else ((prev.averageResponseTimeMs * prev.totalRequests) + durationMs) / total
+            val newHealth = when {
+                !isSuccess && errorMessage != null -> ProviderHealth(status = ProviderStatus.DEGRADED, latencyMs = durationMs, errorMessage = errorMessage)
+                isSuccess -> ProviderHealth(status = ProviderStatus.ACTIVE, latencyMs = durationMs)
+                else -> prev.health
+            }
+            prev.copy(
+                enabled = enabled,
+                health = newHealth,
+                lastSuccessfulResponseMs = if (isSuccess) System.currentTimeMillis() else prev.lastSuccessfulResponseMs,
+                averageResponseTimeMs = newAvg,
+                totalRequests = total,
+                successfulRequests = successful,
+                lastError = if (!isSuccess) errorMessage ?: "Request failed" else prev.lastError
+            )
+        }
+    }
+
+    fun getProviderStats(providerId: String): ProviderStats {
+        return statsMap[providerId] ?: run {
+            val provider = providers.find { it.id == providerId }
+            ProviderStats(
+                providerId = providerId,
+                name = provider?.name ?: providerId,
+                enabled = isProviderEnabled(providerId),
+                supportedLanguages = provider?.supportedLanguages ?: listOf("en")
+            )
+        }
+    }
+
+    fun getAllProviderStats(): List<ProviderStats> {
+        return providers.map { getProviderStats(it.id) }
     }
 
     /**

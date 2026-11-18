@@ -25,6 +25,19 @@ data class ProviderCapabilities(
     val supportsSubtitles: Boolean = false
 )
 
+data class ProviderStats(
+    val providerId: String,
+    val name: String,
+    val enabled: Boolean = true,
+    val health: ProviderHealth = ProviderHealth(),
+    val supportedLanguages: List<String> = listOf("en"),
+    val lastSuccessfulResponseMs: Long? = null,
+    val averageResponseTimeMs: Long = 0L,
+    val totalRequests: Long = 0L,
+    val successfulRequests: Long = 0L,
+    val lastError: String? = null
+)
+
 /**
  * Base contract for modular streaming source providers.
  * Implementations provide discovery, metadata querying, and direct stream resolution.
@@ -36,6 +49,7 @@ interface StreamingProvider {
     val isEnabled: Boolean
     val supportedTypes: Set<MediaType>
     val capabilities: ProviderCapabilities
+    val supportedLanguages: List<String> get() = listOf("en")
 
     suspend fun checkHealth(): ProviderHealth = ProviderHealth(status = ProviderStatus.ACTIVE)
 
