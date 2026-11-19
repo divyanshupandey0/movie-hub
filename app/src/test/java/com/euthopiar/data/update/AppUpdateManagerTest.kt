@@ -285,6 +285,68 @@ class AppUpdateManagerTest {
                 remoteVersionName = "2.0.3"
             )
         )
+
+        // Version 2.0.5 Upgrade Verifications:
+        // Installed 2.0.4 (117) MUST detect 2.0.5 (118) as an update
+        assertTrue(
+            "Installed 2.0.4 (117) must detect remote 2.0.5 (118) as an update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 117,
+                remoteVersionCode = 118,
+                currentVersionName = "2.0.4",
+                remoteVersionName = "2.0.5"
+            )
+        )
+
+        // Installed 2.0.5 (118) must NOT detect remote 2.0.5 (118) as an update (same version)
+        assertFalse(
+            "Installed 2.0.5 (118) must NOT detect remote 2.0.5 (118) as an update",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 118,
+                remoteVersionCode = 118,
+                currentVersionName = "2.0.5",
+                remoteVersionName = "2.0.5"
+            )
+        )
+
+        // Installed 2.0.5 (118) must NOT downgrade to remote 2.0.4 (117)
+        assertFalse(
+            "Installed 2.0.5 (118) must not downgrade to remote 2.0.4 (117)",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 118,
+                remoteVersionCode = 117,
+                currentVersionName = "2.0.5",
+                remoteVersionName = "2.0.4"
+            )
+        )
+    }
+
+    @Test
+    fun testVersion205ReleaseParsingFromGitHubApiWithMarkdown() {
+        val githubApiResponse = JSONObject().apply {
+            put("tag_name", "v2.0.5")
+            put("name", "MOVIE HUB v2.0.5 – Ultra-Fast Streaming Release")
+            put("body", "### MOVIE HUB v2.0.5 – Ultra-Fast Streaming Release\n\n- **Package:** `com.euthopiar`\n- **Version Name:** `2.0.5`\n- **Version Code:** `118`\n\n\n**Full Changelog**: https://github.com/divyanshupandey0/movie-hub/compare/v2.0.4...v2.0.5")
+            put("html_url", "https://github.com/divyanshupandey0/movie-hub/releases/tag/v2.0.5")
+            put("published_at", "2026-11-19T11:00:00Z")
+            put("prerelease", false)
+            val assetsArray = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("name", "MOVIE-HUB-v2.0.5.apk")
+                    put("browser_download_url", "https://github.com/divyanshupandey0/movie-hub/releases/download/v2.0.5/MOVIE-HUB-v2.0.5.apk")
+                    put("size", 50409022L)
+                })
+            }
+            put("assets", assetsArray)
+        }
+
+        val releaseInfo = updateManager.parseGitHubReleaseApi(githubApiResponse)
+        assertEquals("v2.0.5", releaseInfo.tagName)
+        assertEquals("2.0.5", releaseInfo.versionName)
+        assertEquals(118, releaseInfo.versionCode)
+        assertEquals("MOVIE HUB v2.0.5 – Ultra-Fast Streaming Release", releaseInfo.releaseTitle)
+        assertEquals("https://github.com/divyanshupandey0/movie-hub/releases/download/v2.0.5/MOVIE-HUB-v2.0.5.apk", releaseInfo.apkDownloadUrl)
+        assertEquals(50409022L, releaseInfo.apkSizeBytes)
     }
 
     @Test

@@ -18,6 +18,7 @@ sealed interface UserError {
     object Timeout : UserError
     object SourceUnavailable : UserError
     object NoSources : UserError
+    object NoHindiSource : UserError
     data class NoResults(val query: String = "") : UserError
     object Unknown : UserError
 }
@@ -63,6 +64,7 @@ fun UserError.title(): Int = when (this) {
     is UserError.Timeout -> R.string.error_generic_title
     is UserError.SourceUnavailable -> R.string.error_source_failed_title
     is UserError.NoSources -> R.string.error_no_sources_title
+    is UserError.NoHindiSource -> R.string.error_no_hindi_title
     is UserError.NoResults -> if (query.isNotBlank()) R.string.error_no_results_query_title else R.string.error_no_results_title
     is UserError.Unknown -> R.string.error_generic_title
 }
@@ -76,6 +78,7 @@ fun UserError.hint(): Int = when (this) {
     is UserError.Timeout -> R.string.error_generic_hint
     is UserError.SourceUnavailable -> R.string.error_source_failed_hint
     is UserError.NoSources -> R.string.error_no_sources_hint
+    is UserError.NoHindiSource -> R.string.error_no_hindi_hint
     is UserError.NoResults -> R.string.error_no_results_hint
     is UserError.Unknown -> R.string.error_generic_hint
 }

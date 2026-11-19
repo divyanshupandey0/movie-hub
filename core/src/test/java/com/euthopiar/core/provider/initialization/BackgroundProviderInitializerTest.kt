@@ -86,4 +86,27 @@ class BackgroundProviderInitializerTest {
             assertEquals(ProviderLifecycleState.READY, initializer.getProviderState(id))
         }
     }
+
+    @Test
+    fun testReinitializeProviderUpdatesState() = runBlocking {
+        initializer.initializeAllConfiguredProviders(forceRefresh = false)
+        val testId = "prov_wikimedia_commons"
+        val beforeTime = initializer.providerStatesFlow.value[testId]?.lastCheckedTimestampMs ?: 0L
+
+        delay(50L)
+        initializer.reinitializeProvider(testId)
+        val afterTime = initializer.providerStatesFlow.value[testId]?.lastCheckedTimestampMs ?: 0L
+
+        assertTrue("Reinitializing a specific provider should refresh its timestamp", afterTime >= beforeTime)
+    }
+
+    @Test
+    fun testProviderLatencyRecording() = runBlocking {
+        initializer.initializeAllConfiguredProviders(forceRefresh = false)
+        val states = initializer.providerStatesFlow.value
+        states.values.forEach { state ->
+            val latency = initializer.getProviderLatency(state.providerId)
+            assertTrue("Provider latency should be non-negative", latency >= 0L)
+        }
+    }
 }

@@ -11,6 +11,8 @@
     <string name="error_source_failed_hint">Try another source.</string>
     <string name="error_no_sources_title">No sources yet</string>
     <string name="error_no_sources_hint">Add a source to start watching.</string>
+    <string name="error_no_hindi_title">No Hindi Audio Available</string>
+    <string name="error_no_hindi_hint">No verified Hindi audio source is currently available for this content.</string>
     <string name="error_generic_title">Something went wrong</string>
     <string name="error_generic_hint">Try again in a moment.</string>
     <string name="error_no_results_title">No results</string>

@@ -454,7 +454,7 @@ class PlayerViewModel(
                     q.contains("1080", ignoreCase = true) -> 1080
                     q.contains("720", ignoreCase = true) -> 720
                     q.contains("480", ignoreCase = true) -> 480
-                    else -> 2160 // Auto = Highest reliably playable quality
+                    else -> 1080 // Auto = Capped at 1080p maximum for automatic Hindi-first selection
                 }
             }
         }
@@ -2102,7 +2102,7 @@ class PlayerViewModel(
                                         prefQualityStr.contains("1080", ignoreCase = true) -> 1080
                                         prefQualityStr.contains("720", ignoreCase = true) -> 720
                                         prefQualityStr.contains("480", ignoreCase = true) -> 480
-                                        else -> 2160 // Auto = Highest reliably playable quality
+                                        else -> 1080 // Auto = Capped at 1080p maximum for automatic Hindi-first selection
                                     }
 
                                     if (isPrimeCandidate(option, hasDebrid, prefHeight)) {
@@ -2122,19 +2122,33 @@ class PlayerViewModel(
                                             fastStartJob = viewModelScope.launch {
                                                 delay(200L)
                                                 if (isActive && !hasStartedPlayback && sessionToken == currentPlaybackSessionToken.get()) {
-                                                    hasStartedPlayback = true
                                                     playbackStartTimestampMs = System.currentTimeMillis()
                                                     withContext(Dispatchers.Main) {
                                                         if (sessionToken != currentPlaybackSessionToken.get()) return@withContext
                                                         val candidates = _uiState.value.availableServers.filter {
                                                             it.id !in failedServerIds && it.healthCategory != ServerHealthCategory.UNWATCHABLE
                                                         }
-                                                        val bestServer = candidates.maxByOrNull {
+                                                        val hindiEligible = filterHindiEligibleServers(candidates)
+                                                        val bestServer = hindiEligible.maxByOrNull {
                                                             scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
-                                                        } ?: _uiState.value.availableServers.firstOrNull { it.id !in failedServerIds } ?: option
+                                                        } ?: candidates.maxByOrNull {
+                                                            scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
+                                                        }?.takeIf { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) > -500.0 }
 
-                                                        _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = bestServer) }
-                                                        playStreamSource(bestServer.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
+                                                        if (bestServer != null) {
+                                                            hasStartedPlayback = true
+                                                            _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = bestServer) }
+                                                            playStreamSource(bestServer.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
+                                                        } else if (candidates.isNotEmpty()) {
+                                                            _uiState.update {
+                                                                it.copy(
+                                                                    isLoading = false,
+                                                                    isBuffering = false,
+                                                                    userError = com.euthopiar.ui.util.UserError.NoHindiSource,
+                                                                    errorMessage = "No verified Hindi audio source is currently available for this content."
+                                                                )
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2144,14 +2158,29 @@ class PlayerViewModel(
                                         val candidates = _uiState.value.availableServers.filter {
                                             it.id !in failedServerIds && it.healthCategory != ServerHealthCategory.UNWATCHABLE
                                         }
-                                        val bestServer = candidates.maxByOrNull {
+                                        val hindiEligible = filterHindiEligibleServers(candidates)
+                                        val bestServer = hindiEligible.maxByOrNull {
                                             scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
-                                        } ?: _uiState.value.availableServers.firstOrNull { it.id !in failedServerIds } ?: option
+                                        } ?: candidates.maxByOrNull {
+                                            scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
+                                        }?.takeIf { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) > -500.0 }
+
                                         playbackStartTimestampMs = System.currentTimeMillis()
                                         withContext(Dispatchers.Main) {
                                             if (sessionToken != currentPlaybackSessionToken.get()) return@withContext
-                                            _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = bestServer) }
-                                            playStreamSource(bestServer.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
+                                            if (bestServer != null) {
+                                                _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = bestServer) }
+                                                playStreamSource(bestServer.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
+                                            } else if (candidates.isNotEmpty()) {
+                                                _uiState.update {
+                                                    it.copy(
+                                                        isLoading = false,
+                                                        isBuffering = false,
+                                                        userError = com.euthopiar.ui.util.UserError.NoHindiSource,
+                                                        errorMessage = "No verified Hindi audio source is currently available for this content."
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 } else if (hasStartedPlayback && !userExplicitServerSelection && !autoUpgradedOnce && curSelected != null) {
@@ -2369,19 +2398,34 @@ class PlayerViewModel(
                         prefQualityStr.contains("1080", ignoreCase = true) -> 1080
                         prefQualityStr.contains("720", ignoreCase = true) -> 720
                         prefQualityStr.contains("480", ignoreCase = true) -> 480
-                        else -> 2160 // Auto = Highest reliably playable quality
+                        else -> 1080 // Auto = Capped at 1080p maximum for automatic Hindi-first selection
                     }
                     val candidates = _uiState.value.availableServers.filter {
                         it.id !in failedServerIds && it.healthCategory != ServerHealthCategory.UNWATCHABLE
                     }
-                    val bestServer = candidates.maxByOrNull {
+                    val hindiEligible = filterHindiEligibleServers(candidates)
+                    val bestServer = hindiEligible.maxByOrNull {
                         scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
-                    } ?: _uiState.value.availableServers.firstOrNull { it.id !in failedServerIds }
+                    } ?: candidates.maxByOrNull {
+                        scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
+                    }?.takeIf { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) > -500.0 }
+
                     if (bestServer != null) {
                         hasStartedPlayback = true
                         withContext(Dispatchers.Main) {
                             _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = bestServer) }
                             playStreamSource(bestServer.streamSource, collectedSubtitles, seekToPosition = resumePosition)
+                        }
+                    } else if (candidates.isNotEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    isBuffering = false,
+                                    userError = com.euthopiar.ui.util.UserError.NoHindiSource,
+                                    errorMessage = "No verified Hindi audio source is currently available for this content."
+                                )
+                            }
                         }
                     }
                 }
@@ -4026,6 +4070,21 @@ class PlayerViewModel(
         }
     }
 
+    fun filterHindiEligibleServers(servers: List<ServerSourceOption>): List<ServerSourceOption> {
+        return servers.filter { option ->
+            val src = option.streamSource
+            val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
+            val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
+            if (hasVerifiedNonHindiOnly) return@filter false
+
+            val text = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
+            val isExplicitRegionalOnly = text.contains("tamil only") || text.contains("telugu only") || text.contains("malayalam only") || text.contains("kannada only") || text.contains("bengali only")
+            if (isExplicitRegionalOnly) return@filter false
+
+            hasVerifiedHindi || text.contains("hindi") || text.contains("hin") || (option.audioBadge?.contains("HIN", true) == true)
+        }
+    }
+
     fun scoreServerForInitialAutoPlay(
         option: ServerSourceOption,
         hasDebrid: Boolean,
@@ -4091,101 +4150,76 @@ class PlayerViewModel(
             }
         }
 
-        // 4. Preferred Audio Language Tier (Hindi-First Priority: HIN -> ENG -> TAM -> TEL -> MAL -> BEN)
+        // 4. Preferred Audio Language Tier (Hindi-First Priority)
         val combinedLangText = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
         val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
         val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
         
-        // Strict exclusion of non-Hindi only sources
-        val isExplicitNonHindi = src.audioTracks.isNotEmpty() && 
-            src.audioTracks.all { !it.isoCode.equals("hi", true) && !it.languageName.contains("hindi", true) }
+        // Strict exclusion of non-Hindi only sources (Tamil only, Telugu only, Malayalam only, Kannada only, etc.)
+        val isExplicitRegionalOnly = combinedLangText.contains("tamil only") ||
+                combinedLangText.contains("telugu only") ||
+                combinedLangText.contains("malayalam only") ||
+                combinedLangText.contains("kannada only") ||
+                combinedLangText.contains("bengali only") ||
+                combinedLangText.contains("tam only") ||
+                combinedLangText.contains("tel only") ||
+                combinedLangText.contains("mal only") ||
+                combinedLangText.contains("kan only") ||
+                (combinedLangText.contains("tamil") && !combinedLangText.contains("hindi") && !combinedLangText.contains("multi") && !combinedLangText.contains("dual")) ||
+                (combinedLangText.contains("telugu") && !combinedLangText.contains("hindi") && !combinedLangText.contains("multi") && !combinedLangText.contains("dual")) ||
+                (combinedLangText.contains("malayalam") && !combinedLangText.contains("hindi") && !combinedLangText.contains("multi") && !combinedLangText.contains("dual")) ||
+                (combinedLangText.contains("kannada") && !combinedLangText.contains("hindi") && !combinedLangText.contains("multi") && !combinedLangText.contains("dual"))
 
-        // Strictly never mark a source Hindi based only on its title if verified audio exists and contradicts it
-        val hasHindi = if (hasVerifiedNonHindiOnly) false else (hasVerifiedHindi || combinedLangText.contains("hindi") || combinedLangText.contains("hin") || (option.audioBadge?.contains("HIN", true) == true))
-
-        val hasEnglish = src.audioTracks.any { it.isoCode.equals("en", true) || it.languageName.contains("english", true) } ||
-                combinedLangText.contains("english") || combinedLangText.contains("eng") || (option.audioBadge?.contains("ENG", true) == true)
-        val hasTamil = src.audioTracks.any { it.isoCode.equals("ta", true) || it.languageName.contains("tamil", true) } ||
-                combinedLangText.contains("tamil") || combinedLangText.contains("tam") || (option.audioBadge?.contains("TAM", true) == true)
-        val hasTelugu = src.audioTracks.any { it.isoCode.equals("te", true) || it.languageName.contains("telugu", true) } ||
-                combinedLangText.contains("telugu") || combinedLangText.contains("tel") || (option.audioBadge?.contains("TEL", true) == true)
-        val hasMalayalam = src.audioTracks.any { it.isoCode.equals("ml", true) || it.languageName.contains("malayalam", true) } ||
-                combinedLangText.contains("malayalam") || combinedLangText.contains("mal") || (option.audioBadge?.contains("MAL", true) == true)
-        val hasBengali = src.audioTracks.any { it.isoCode.equals("bn", true) || it.languageName.contains("bengali", true) } ||
-                combinedLangText.contains("bengali") || combinedLangText.contains("ben") || (option.audioBadge?.contains("BEN", true) == true)
+        val isExplicitNonHindi = hasVerifiedNonHindiOnly || isExplicitRegionalOnly
         val isMultiOrDual = combinedLangText.contains("dual") || combinedLangText.contains("multi")
+        val hasMetadataHindi = !isExplicitNonHindi && (combinedLangText.contains("hindi") || combinedLangText.contains("hin") || (option.audioBadge?.contains("HIN", true) == true))
 
         if (isExplicitNonHindi) {
-            score -= 500.0 // Heavy penalty for verified non-Hindi
-        } else if (hasVerifiedHindi && (hasEnglish || isMultiOrDual)) {
-            score += 500.0 // Top priority: Verified Hindi Dual/Multi
-        } else if (hasVerifiedHindi) {
-            score += 400.0 // Verified Hindi audio track
-        } else if (hasHindi && (hasEnglish || isMultiOrDual)) {
-            score += 300.0 // Metadata Hindi Dual/Multi
-        } else if (hasHindi) {
+            score -= 1000.0 // Heavy penalty for non-Hindi only
+        } else if (hasVerifiedHindi && !isMultiOrDual) {
+            score += 600.0 // Priority 1: Verified Hindi audio
+        } else if (hasVerifiedHindi && isMultiOrDual) {
+            score += 550.0 // Priority 4: Verified Multi-language containing Hindi
+        } else if (hasMetadataHindi && isMultiOrDual) {
+            score += 300.0 // Metadata Multi with Hindi
+        } else if (hasMetadataHindi) {
             score += 250.0 // Metadata Hindi
-        } else if (hasEnglish && isMultiOrDual) {
-            score += 150.0
-        } else if (hasEnglish) {
-            score += 100.0
         } else {
-            score -= 100.0 // Unknown/Unverified
+            score -= 200.0 // UNKNOWN: never prioritized over verified Hindi
         }
 
         // 5. Resolution & Codec Compatibility Tier
         val height = parseResolutionHeight(option.resolutionLabel.ifBlank { src.quality })
         
-        // Penalize 4K/HDR automatically
-        if (height >= 2160 || combinedLangText.contains("4k") || combinedLangText.contains("hdr") || combinedLangText.contains("dovi")) {
-            score -= 500.0
+        // Disable automatic selection of 4K / 2160p / HDR / Dolby Vision
+        if (preferredQualityHeight < 2160) {
+            if (height >= 2160 || combinedLangText.contains("4k") || combinedLangText.contains("2160p") || combinedLangText.contains("hdr") || combinedLangText.contains("dovi")) {
+                score -= 500.0
+            }
+            // Automatic resolution priority: 1080p > 720p > 480p
+            when (height) {
+                1080 -> score += 200.0
+                720 -> score += 130.0
+                480 -> score += 80.0
+                else -> score += 40.0
+            }
+        } else {
+            // Manual quality selection preserves 4K when user explicitly configures 4K
+            when {
+                height >= 2160 -> score += 350.0
+                height == 1080 -> score += 200.0
+                height == 720 -> score += 150.0
+                height == 480 -> score += 100.0
+                else -> score += 50.0
+            }
         }
 
-        val combinedText = "${option.serverName} ${option.label}".lowercase()
+        val combinedText = combinedLangText
         val isRemux = combinedText.contains("remux")
         val isDvOnly = (combinedText.contains("dovi") || combinedText.contains("dv") || combinedText.contains("dolby vision")) &&
                 !combinedText.contains("hdr10") && !combinedText.contains("hdr")
         val sizeGb = parseSizeToGb(option.label) ?: parseSizeToGb(option.serverName) ?: 0.0
         val isHeavyRemux = isRemux && (sizeGb > 20.0 || sizeGb == 0.0)
-
-        when {
-            preferredQualityHeight >= 2160 -> when {
-                height == 1080 -> score += 300.0
-                height == 720 -> score += 200.0
-                height == 480 -> score += 100.0
-                else -> score += 50.0
-            }
-            preferredQualityHeight == 1440 -> when {
-                height == 1080 -> score += 300.0
-                height == 720 -> score += 200.0
-                height == 480 -> score += 100.0
-                else -> score += 50.0
-            }
-            preferredQualityHeight == 720 -> when {
-                height == 720 -> score += 220.0
-                height == 1080 -> score += 130.0
-                height == 480 -> score += 110.0
-                height == 0 -> score += 100.0
-                height >= 1440 -> score += 70.0
-                else -> score += 50.0
-            }
-            preferredQualityHeight == 480 -> when {
-                height == 480 -> score += 220.0
-                height == 720 -> score += 140.0
-                height == 360 -> score += 110.0
-                height == 0 -> score += 90.0
-                height == 1080 -> score += 90.0
-                else -> score += 40.0
-            }
-            else -> when { // 1080p default / Auto
-                height == 1080 -> score += 200.0
-                height == 720 -> score += 130.0
-                height == 0 -> score += 115.0
-                height >= 2160 -> score += 110.0
-                height == 480 -> score += 80.0
-                else -> score += 50.0
-            }
-        }
 
         if (combinedText.contains("hevc") || combinedText.contains("x265") || combinedText.contains("h.265") || combinedText.contains("h265")) {
             score += 30.0

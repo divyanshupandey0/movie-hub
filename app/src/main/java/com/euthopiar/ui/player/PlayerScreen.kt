@@ -594,15 +594,26 @@ fun PlayerScreen(
                             modifier = Modifier.size(48.dp)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+                        val errorTitle = when (activeError) {
+                            is UserError.NoSources -> "No Stream Providers Installed"
+                            is UserError.NoHindiSource -> stringResource(R.string.error_no_hindi_title)
+                            else -> stringResource(R.string.error_source_failed_title)
+                        }
+                        val errorHint = when {
+                            !uiState.errorMessage.isNullOrBlank() -> uiState.errorMessage!!
+                            activeError is UserError.NoSources -> "Install a provider plugin or Stremio addon in settings to stream content."
+                            activeError is UserError.NoHindiSource -> stringResource(R.string.error_no_hindi_hint)
+                            else -> stringResource(R.string.error_source_failed_hint)
+                        }
                         Text(
-                            text = if (activeError is UserError.NoSources) "No Stream Providers Installed" else stringResource(R.string.error_source_failed_title),
+                            text = errorTitle,
                             style = PlayerTokens.SheetHeadline.copy(fontSize = 20.sp),
                             color = Color.White,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (activeError is UserError.NoSources) "Install a provider plugin or Stremio addon in settings to stream content." else stringResource(R.string.error_source_failed_hint),
+                            text = errorHint,
                             style = PlayerTokens.HeaderSubtitle,
                             color = Color.White.copy(alpha = 0.70f),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center

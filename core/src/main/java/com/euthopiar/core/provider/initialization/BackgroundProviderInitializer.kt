@@ -66,7 +66,7 @@ class BackgroundProviderInitializer private constructor() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val providerStates = ConcurrentHashMap<String, ProviderStateInfo>()
     private val initLocks = ConcurrentHashMap<String, Job>()
-    private val concurrencySemaphore = Semaphore(permits = 3)
+    private val concurrencySemaphore = Semaphore(permits = 4)
 
     private val _isGlobalReady = MutableStateFlow(false)
     val isGlobalReady: StateFlow<Boolean> = _isGlobalReady.asStateFlow()
@@ -121,6 +121,11 @@ class BackgroundProviderInitializer private constructor() {
         // Gather all authorized providers
         val contentProviders = contentRegistry.getAllProviders()
         val streamingServices = sourceRegistry.getAllServices()
+        val nativeStreamingProviders = try {
+            com.euthopiar.core.provider.StreamingSourceManager.getInstance().getProviders()
+        } catch (_: Throwable) {
+            emptyList()
+        }
 
         // Populate initial NOT_INITIALIZED states
         contentProviders.forEach { cp ->
@@ -137,6 +142,15 @@ class BackgroundProviderInitializer private constructor() {
                 providerStates[ss.id] = ProviderStateInfo(
                     providerId = ss.id,
                     name = ss.name,
+                    state = ProviderLifecycleState.NOT_INITIALIZED
+                )
+            }
+        }
+        nativeStreamingProviders.forEach { np ->
+            if (!providerStates.containsKey(np.id) || forceRefresh) {
+                providerStates[np.id] = ProviderStateInfo(
+                    providerId = np.id,
+                    name = np.name,
                     state = ProviderLifecycleState.NOT_INITIALIZED
                 )
             }
@@ -164,6 +178,27 @@ class BackgroundProviderInitializer private constructor() {
             }
         }
 
+        // Initialize Native Streaming Providers with controlled concurrency
+        nativeStreamingProviders.filter { it.isEnabled }.forEach { provider ->
+            jobs += scope.launch {
+                concurrencySemaphore.withPermit {
+                    initContentProvider(provider.id, provider.name, forceRefresh) {
+                        val health = provider.checkHealth()
+                        com.euthopiar.core.provider.catalog.ProviderHealthInfo(
+                            status = when (health.status) {
+                                com.euthopiar.core.provider.ProviderStatus.ACTIVE -> IntegrationHealthStatus.ACTIVE
+                                com.euthopiar.core.provider.ProviderStatus.DEGRADED -> IntegrationHealthStatus.TESTING
+                                com.euthopiar.core.provider.ProviderStatus.OFFLINE -> IntegrationHealthStatus.UNAVAILABLE
+                                else -> IntegrationHealthStatus.UNAVAILABLE
+                            },
+                            errorMessage = health.errorMessage,
+                            latencyMs = health.latencyMs
+                        )
+                    }
+                }
+            }
+        }
+
         // Wait for all to complete in background
         jobs.forEach { it.join() }
 
@@ -187,8 +222,9 @@ class BackgroundProviderInitializer private constructor() {
             if (current.state == ProviderLifecycleState.READY && (now - current.lastCheckedTimestampMs) < SUCCESS_CACHE_TTL_MS) {
                 return
             }
+            val backoffMs = kotlin.math.min(SUCCESS_CACHE_TTL_MS, FAILURE_CACHE_TTL_MS * (1L shl kotlin.math.min(current.retryCount, 4)))
             if (current.state in listOf(ProviderLifecycleState.UNAVAILABLE, ProviderLifecycleState.ERROR) &&
-                (now - current.lastCheckedTimestampMs) < FAILURE_CACHE_TTL_MS
+                (now - current.lastCheckedTimestampMs) < backoffMs
             ) {
                 return
             }
@@ -263,8 +299,9 @@ class BackgroundProviderInitializer private constructor() {
             if (current.state == ProviderLifecycleState.READY && (now - current.lastCheckedTimestampMs) < SUCCESS_CACHE_TTL_MS) {
                 return
             }
+            val backoffMs = kotlin.math.min(SUCCESS_CACHE_TTL_MS, FAILURE_CACHE_TTL_MS * (1L shl kotlin.math.min(current.retryCount, 4)))
             if (current.state in listOf(ProviderLifecycleState.UNAVAILABLE, ProviderLifecycleState.ERROR) &&
-                (now - current.lastCheckedTimestampMs) < FAILURE_CACHE_TTL_MS
+                (now - current.lastCheckedTimestampMs) < backoffMs
             ) {
                 return
             }
@@ -343,6 +380,58 @@ class BackgroundProviderInitializer private constructor() {
      */
     fun getReadyProviderIds(): Set<String> {
         return providerStates.filterValues { it.state == ProviderLifecycleState.READY }.keys
+    }
+
+    /**
+     * Returns the recorded latency in milliseconds for a provider.
+     */
+    fun getProviderLatency(id: String): Long {
+        return providerStates[id]?.latencyMs ?: 0L
+    }
+
+    /**
+     * Reinitialize a single provider on demand.
+     */
+    suspend fun reinitializeProvider(id: String) {
+        val contentProvider = ContentProviderRegistry.getInstance().getProvider(id)
+        if (contentProvider != null) {
+            initContentProvider(contentProvider.id, contentProvider.name, forceRefresh = true) {
+                contentProvider.checkHealth()
+            }
+            return
+        }
+        val sourceService = StreamingSourceRegistry.getInstance().getService(id)
+        if (sourceService != null) {
+            initStreamingService(sourceService.id, sourceService.name, forceRefresh = true, sourceService.healthStatus)
+            return
+        }
+        val nativeProvider = try {
+            com.euthopiar.core.provider.StreamingSourceManager.getInstance().getProviders().find { it.id == id }
+        } catch (_: Throwable) { null }
+        if (nativeProvider != null) {
+            initContentProvider(nativeProvider.id, nativeProvider.name, forceRefresh = true) {
+                val health = nativeProvider.checkHealth()
+                com.euthopiar.core.provider.catalog.ProviderHealthInfo(
+                    status = when (health.status) {
+                        com.euthopiar.core.provider.ProviderStatus.ACTIVE -> IntegrationHealthStatus.ACTIVE
+                        com.euthopiar.core.provider.ProviderStatus.DEGRADED -> IntegrationHealthStatus.TESTING
+                        com.euthopiar.core.provider.ProviderStatus.OFFLINE -> IntegrationHealthStatus.UNAVAILABLE
+                        else -> IntegrationHealthStatus.UNAVAILABLE
+                    },
+                    errorMessage = health.errorMessage,
+                    latencyMs = health.latencyMs
+                )
+            }
+        }
+    }
+
+    /**
+     * Asynchronously reinitializes all providers.
+     */
+    fun reinitializeAll() {
+        scope.launch {
+            initializeAllConfiguredProviders(forceRefresh = true)
+        }
     }
 
     /**

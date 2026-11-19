@@ -356,7 +356,7 @@ class AppUpdateManager private constructor(private val context: Context) {
             when {
                 major == 1 && minor == 0 -> 100 + patch
                 major == 1 && minor == 1 -> 110 + patch // v1.1.0 -> 110, v1.1.1 -> 111, v1.1.2 -> 112, v1.1.3 -> 113
-                major == 2 && minor == 0 -> 113 + patch // v2.0.1 -> 114, v2.0.2 -> 115, v2.0.3 -> 116, v2.0.4 -> 117
+                major == 2 && minor == 0 -> 113 + patch // v2.0.1 -> 114, v2.0.2 -> 115, v2.0.3 -> 116, v2.0.4 -> 117, v2.0.5 -> 118
                 else -> (major * 100) + (minor * 10) + patch
             }
         } catch (_: Exception) {

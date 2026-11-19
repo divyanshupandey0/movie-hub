@@ -22,7 +22,12 @@ object StreamsRepository {
     private val _uiState = MutableStateFlow(StreamsUiState())
     val uiState: StateFlow<StreamsUiState> = _uiState.asStateFlow()
 
-    private val streamCache = object : android.util.LruCache<String, List<AddonStreamGroup>>(30) {}
+    private const val STREAM_CACHE_TTL_MS = 10 * 60 * 1000L // 10 minutes cache
+    data class CachedStreams(
+        val timestampMs: Long,
+        val groups: List<AddonStreamGroup>
+    )
+    private val streamCache = object : android.util.LruCache<String, CachedStreams>(60) {}
 
     private var activeJob: Job? = null
     private var activeRequestKey: String? = null
@@ -63,12 +68,18 @@ object StreamsRepository {
             return
         }
 
-        val cachedGroups = if (!forceRefresh) streamCache.get(requestToken) else null
-        if (cachedGroups != null && cachedGroups.any { it.streams.isNotEmpty() }) {
-            val allCached = cachedGroups.flatMap { it.streams }
+        if (!forceRefresh && activeRequestKey == requestToken && activeJob?.isActive == true) {
+            // Already actively fetching for this exact token; reuse in-flight execution
+            return
+        }
+
+        val cached = if (!forceRefresh) streamCache.get(requestToken) else null
+        val now = System.currentTimeMillis()
+        if (cached != null && (now - cached.timestampMs) < STREAM_CACHE_TTL_MS && cached.groups.any { it.streams.isNotEmpty() }) {
+            val allCached = cached.groups.flatMap { it.streams }
             _uiState.value = StreamsUiState(
                 requestToken = requestToken,
-                groups = cachedGroups,
+                groups = cached.groups,
                 isAnyLoading = false,
                 autoPlayStream = allCached.firstOrNull { it.playableDirectUrl != null },
                 emptyStateReason = null
@@ -97,7 +108,14 @@ object StreamsRepository {
         val scrapers = rawScrapers.filterNot {
             it.id.contains("dahmer", ignoreCase = true) || it.name.contains("dahmer", ignoreCase = true) ||
             it.id.contains("dharma", ignoreCase = true) || it.name.contains("dharma", ignoreCase = true)
-        }
+        }.sortedWith(
+            compareByDescending<com.euthopiar.core.js.PluginScraper> {
+                it.name.contains("4khdhub", ignoreCase = true) || it.id.contains("4khdhub", ignoreCase = true) ||
+                it.name.contains("desiflix", ignoreCase = true) || it.id.contains("desiflix", ignoreCase = true) ||
+                it.name.contains("moviesmod", ignoreCase = true) || it.id.contains("moviesmod", ignoreCase = true) ||
+                it.name.contains("puretoons", ignoreCase = true) || it.id.contains("puretoons", ignoreCase = true)
+            }.thenBy { it.name }
+        )
         val addonRepo = com.euthopiar.core.addons.AddonRepository.getInstanceOrNull()
         val targetAddonType = if (isLiveTv) "live" else normType
         val rawAddons = addonRepo?.getEnabledAddonsForType(targetAddonType, cleanTmdbId) ?: emptyList()
@@ -315,7 +333,7 @@ object StreamsRepository {
                             "MovieHubStreaming",
                             "Scraper [${scraper.name}] Request: TMDB=$canonicalTmdbId, IMDb=$effectiveImdbId, Type=$jsMediaType, Season=$season, Episode=$episode, Title='$effectiveTitle'"
                         )
-                        val results = withTimeoutOrNull(60_000L) {
+                        val results = withTimeoutOrNull(12_000L) {
                             PluginRuntime.executePlugin(
                                 code = scraper.code,
                                 tmdbId = canonicalTmdbId,
@@ -614,7 +632,7 @@ object StreamsRepository {
                         val bestAutoPlay = current.autoPlayStream ?: allAvailable.firstOrNull { it.playableDirectUrl != null }
 
                         if (allAvailable.isNotEmpty()) {
-                            streamCache.put(requestToken, updatedGroups)
+                            streamCache.put(requestToken, CachedStreams(System.currentTimeMillis(), updatedGroups))
                         }
 
                         current.copy(
