@@ -4095,6 +4095,11 @@ class PlayerViewModel(
         val combinedLangText = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
         val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
         val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
+        
+        // Strict exclusion of non-Hindi only sources
+        val isExplicitNonHindi = src.audioTracks.isNotEmpty() && 
+            src.audioTracks.all { !it.isoCode.equals("hi", true) && !it.languageName.contains("hindi", true) }
+
         // Strictly never mark a source Hindi based only on its title if verified audio exists and contradicts it
         val hasHindi = if (hasVerifiedNonHindiOnly) false else (hasVerifiedHindi || combinedLangText.contains("hindi") || combinedLangText.contains("hin") || (option.audioBadge?.contains("HIN", true) == true))
 
@@ -4110,32 +4115,32 @@ class PlayerViewModel(
                 combinedLangText.contains("bengali") || combinedLangText.contains("ben") || (option.audioBadge?.contains("BEN", true) == true)
         val isMultiOrDual = combinedLangText.contains("dual") || combinedLangText.contains("multi")
 
-        if (hasVerifiedHindi && (hasEnglish || isMultiOrDual)) {
-            score += 350.0 // Top priority: Verified Hindi Dual/Multi
+        if (isExplicitNonHindi) {
+            score -= 500.0 // Heavy penalty for verified non-Hindi
+        } else if (hasVerifiedHindi && (hasEnglish || isMultiOrDual)) {
+            score += 500.0 // Top priority: Verified Hindi Dual/Multi
         } else if (hasVerifiedHindi) {
-            score += 300.0 // Verified Hindi audio track
+            score += 400.0 // Verified Hindi audio track
         } else if (hasHindi && (hasEnglish || isMultiOrDual)) {
-            score += 240.0 // Metadata Hindi Dual/Multi
+            score += 300.0 // Metadata Hindi Dual/Multi
         } else if (hasHindi) {
-            score += 200.0 // Metadata Hindi
+            score += 250.0 // Metadata Hindi
         } else if (hasEnglish && isMultiOrDual) {
-            score += 160.0
+            score += 150.0
         } else if (hasEnglish) {
-            score += 140.0 // English
-        } else if (hasTamil) {
-            score += 120.0 // Tamil
-        } else if (hasTelugu) {
-            score += 110.0 // Telugu
-        } else if (hasMalayalam) {
-            score += 100.0 // Malayalam
-        } else if (hasBengali) {
-            score += 90.0  // Bengali
-        } else if (isMultiOrDual) {
-            score += 80.0
+            score += 100.0
+        } else {
+            score -= 100.0 // Unknown/Unverified
         }
 
         // 5. Resolution & Codec Compatibility Tier
         val height = parseResolutionHeight(option.resolutionLabel.ifBlank { src.quality })
+        
+        // Penalize 4K/HDR automatically
+        if (height >= 2160 || combinedLangText.contains("4k") || combinedLangText.contains("hdr") || combinedLangText.contains("dovi")) {
+            score -= 500.0
+        }
+
         val combinedText = "${option.serverName} ${option.label}".lowercase()
         val isRemux = combinedText.contains("remux")
         val isDvOnly = (combinedText.contains("dovi") || combinedText.contains("dv") || combinedText.contains("dolby vision")) &&
@@ -4145,19 +4150,15 @@ class PlayerViewModel(
 
         when {
             preferredQualityHeight >= 2160 -> when {
-                height >= 2160 -> score += 220.0
-                height == 1440 -> score += 160.0
-                height == 1080 -> score += 120.0
-                height == 0 -> score += 90.0
-                height == 720 -> score += 80.0
-                else -> score += 40.0
+                height == 1080 -> score += 300.0
+                height == 720 -> score += 200.0
+                height == 480 -> score += 100.0
+                else -> score += 50.0
             }
             preferredQualityHeight == 1440 -> when {
-                height == 1440 -> score += 220.0
-                height == 1080 -> score += 150.0
-                height >= 2160 -> score += 130.0
-                height == 0 -> score += 100.0
-                height == 720 -> score += 90.0
+                height == 1080 -> score += 300.0
+                height == 720 -> score += 200.0
+                height == 480 -> score += 100.0
                 else -> score += 50.0
             }
             preferredQualityHeight == 720 -> when {

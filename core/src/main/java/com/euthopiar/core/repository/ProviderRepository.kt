@@ -258,9 +258,6 @@ open class ProviderRepository(
         val targetName = providerName ?: mediaItem.provider
 
         // Check native providers first if explicitly requested or matched by ID
-        if (mediaItem.id.startsWith("archive:") || targetName?.equals("Internet Archive", ignoreCase = true) == true) {
-            return@withContext com.euthopiar.core.provider.StreamingSourceManager.getInstance().internetArchiveProvider.getDetails(mediaItem)
-        }
         if (mediaItem.id.startsWith("wikimedia:") || targetName?.equals("Wikimedia Commons", ignoreCase = true) == true) {
             return@withContext com.euthopiar.core.provider.StreamingSourceManager.getInstance().wikimediaCommonsProvider.getDetails(mediaItem)
         }

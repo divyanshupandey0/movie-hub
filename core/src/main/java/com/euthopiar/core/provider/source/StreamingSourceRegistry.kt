@@ -43,7 +43,6 @@ class StreamingSourceRegistry private constructor() {
         register(PlavioHdSourceService())
         register(TorrentioSourceService())
         register(MediaFusionSourceService())
-        register(InternetArchiveSourceService())
         register(WikimediaCommonsSourceService())
         register(CustomStreamSourceService())
         register(JellyfinSourceService())
@@ -88,7 +87,14 @@ class StreamingSourceRegistry private constructor() {
      * with isolated 15s per-service timeouts and strict identity verification.
      */
     suspend fun resolveAllStreams(hints: MatchHints, timeoutMs: Long = 15000L): List<PlayableStream> = withContext(Dispatchers.IO) {
-        val activeServices = getEnabledServices()
+        val initializer = com.euthopiar.core.provider.initialization.BackgroundProviderInitializer.getInstance()
+        val allEnabled = getEnabledServices()
+        // Prioritize services that are validated as READY by background initializer, or evaluate directly if none yet marked READY
+        val activeServices = if (allEnabled.any { initializer.isProviderReady(it.id) }) {
+            allEnabled.filter { initializer.isProviderReady(it.id) || initializer.getProviderState(it.id) == com.euthopiar.core.provider.initialization.ProviderLifecycleState.NOT_INITIALIZED }
+        } else {
+            allEnabled
+        }
         coroutineScope {
             val deferred = activeServices.map { service ->
                 async {

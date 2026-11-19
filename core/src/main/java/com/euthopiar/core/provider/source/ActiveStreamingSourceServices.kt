@@ -3,7 +3,6 @@ package com.euthopiar.core.provider.source
 import com.euthopiar.core.model.MatchHints
 import com.euthopiar.core.model.StreamContainer
 import com.euthopiar.core.network.DohDns
-import com.euthopiar.core.provider.archive.InternetArchiveProvider
 import com.euthopiar.core.provider.catalog.IntegrationHealthStatus
 import com.euthopiar.core.provider.custom.CustomStreamProvider
 import com.euthopiar.core.provider.media.JellyfinMediaServerProvider
@@ -127,75 +126,23 @@ class MediaFusionSourceService : StreamingSourceService {
     override suspend fun resolvePlayableStreams(hints: MatchHints): List<PlayableStream> = emptyList()
 }
 
-/**
- * Native StreamingSourceService for Internet Archive public domain cinema.
- */
-class InternetArchiveSourceService(
-    private val delegate: InternetArchiveProvider = InternetArchiveProvider()
-) : StreamingSourceService {
-    override val id: String = "src_internet_archive"
-    override val name: String = "Internet Archive Public Domain"
-    override val isAuthorized: Boolean = true
-    override val isEnabled: Boolean = true
-    override val healthStatus: IntegrationHealthStatus = IntegrationHealthStatus.ACTIVE
-    override val supportedFormats: Set<StreamContainer> = setOf(StreamContainer.MP4, StreamContainer.AUTO)
-
-    override suspend fun resolvePlayableStreams(hints: MatchHints): List<PlayableStream> {
-        val streamItems = delegate.getStreamItems(
-            mediaId = hints.tmdbId?.toString() ?: hints.imdbId.orEmpty(),
-            title = hints.titles.firstOrNull(),
-            year = hints.year
-        )
-        return streamItems.mapNotNull { item ->
-            val decision = ContentIdentityVerifier.verify(hints, item)
-            if (decision.confidence == SourceConfidence.REJECTED) return@mapNotNull null
-            PlayableStream(
-                url = item.url ?: return@mapNotNull null,
-                format = StreamContainer.MP4,
-                quality = item.quality ?: "720p",
-                sourceName = "Internet Archive • Public Domain",
-                sourceId = id,
-                verificationConfidence = decision.confidence,
-                verificationReason = decision.reason,
-                matchScore = decision.score
-            )
-        }
-    }
-}
 
 /**
- * Native StreamingSourceService for Wikimedia Commons Creative Commons media.
+ * Native StreamingSourceService for Wikimedia Commons Creative Commons media (DISABLED for commercial movies).
  */
 class WikimediaCommonsSourceService(
     private val delegate: WikimediaCommonsProvider = WikimediaCommonsProvider()
 ) : StreamingSourceService {
     override val id: String = "src_wikimedia_commons"
     override val name: String = "Wikimedia Commons"
-    override val isAuthorized: Boolean = true
-    override val isEnabled: Boolean = true
-    override val healthStatus: IntegrationHealthStatus = IntegrationHealthStatus.ACTIVE
+    override val isAuthorized: Boolean = false
+    override val isEnabled: Boolean = false
+    override val healthStatus: IntegrationHealthStatus = IntegrationHealthStatus.DISABLED
     override val supportedFormats: Set<StreamContainer> = setOf(StreamContainer.MP4, StreamContainer.AUTO)
 
     override suspend fun resolvePlayableStreams(hints: MatchHints): List<PlayableStream> {
-        val streamItems = delegate.getStreamItems(
-            mediaId = hints.tmdbId?.toString() ?: hints.imdbId.orEmpty(),
-            title = hints.titles.firstOrNull(),
-            year = hints.year
-        )
-        return streamItems.mapNotNull { item ->
-            val decision = ContentIdentityVerifier.verify(hints, item)
-            if (decision.confidence == SourceConfidence.REJECTED) return@mapNotNull null
-            PlayableStream(
-                url = item.url ?: return@mapNotNull null,
-                format = StreamContainer.MP4,
-                quality = item.quality ?: "720p",
-                sourceName = "Wikimedia Commons • CC Media",
-                sourceId = id,
-                verificationConfidence = decision.confidence,
-                verificationReason = decision.reason,
-                matchScore = decision.score
-            )
-        }
+        // Disabled: Wikimedia Commons does not provide commercial movies or television streams
+        return emptyList()
     }
 }
 

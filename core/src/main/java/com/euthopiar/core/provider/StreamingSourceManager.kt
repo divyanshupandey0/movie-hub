@@ -4,7 +4,6 @@ import com.euthopiar.core.model.MediaDetail
 import com.euthopiar.core.model.MediaItem
 import com.euthopiar.core.model.MediaType
 import com.euthopiar.core.model.StreamContainer
-import com.euthopiar.core.provider.archive.InternetArchiveProvider
 import com.euthopiar.core.provider.custom.CustomStreamProvider
 import com.euthopiar.core.provider.metadata.StreamingMetadataManager
 import com.euthopiar.core.provider.wikimedia.WikimediaCommonsProvider
@@ -31,7 +30,6 @@ class StreamingSourceManager private constructor() {
     private val statsMap = ConcurrentHashMap<String, ProviderStats>()
 
     val metadataManager: StreamingMetadataManager by lazy { StreamingMetadataManager.getInstance() }
-    val internetArchiveProvider: InternetArchiveProvider by lazy { InternetArchiveProvider() }
     val wikimediaCommonsProvider: WikimediaCommonsProvider by lazy { WikimediaCommonsProvider() }
     val customStreamProvider: CustomStreamProvider by lazy { CustomStreamProvider() }
     val castleTvProvider: com.euthopiar.core.provider.castle.CastleTvProvider by lazy { com.euthopiar.core.provider.castle.CastleTvProvider() }
@@ -39,14 +37,12 @@ class StreamingSourceManager private constructor() {
 
     init {
         // Register default official and authorized streaming source providers
-        registerProvider(internetArchiveProvider)
         registerProvider(wikimediaCommonsProvider)
         registerProvider(customStreamProvider)
         registerProvider(castleTvProvider)
         registerProvider(jellyfinProvider)
 
         // Also register with UniversalPlugin registry for catalog and search visibility
-        PluginRegistry.Default.registerPlugin(internetArchiveProvider)
         PluginRegistry.Default.registerPlugin(wikimediaCommonsProvider)
     }
 

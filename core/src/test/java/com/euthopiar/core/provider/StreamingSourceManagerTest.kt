@@ -2,7 +2,6 @@ package com.euthopiar.core.provider
 
 import com.euthopiar.core.model.MediaType
 import com.euthopiar.core.model.StreamContainer
-import com.euthopiar.core.provider.archive.InternetArchiveProvider
 import com.euthopiar.core.provider.custom.CustomStreamProvider
 import com.euthopiar.core.provider.metadata.StreamingMetadataManager
 import com.euthopiar.core.provider.wikimedia.WikimediaCommonsProvider
@@ -33,19 +32,19 @@ class StreamingSourceManagerTest {
     @Test
     fun testDefaultProvidersRegistration() {
         val providers = manager.getProviders()
-        assertTrue("Should have default providers registered", providers.size >= 5)
-        assertTrue("Should contain Internet Archive", providers.any { it.id == "internet_archive" })
+        assertTrue("Should have default providers registered", providers.size >= 4)
         assertTrue("Should contain Wikimedia Commons", providers.any { it.id == "wikimedia_commons" })
         assertTrue("Should contain Custom Stream", providers.any { it.id == "custom_stream" })
         assertTrue("Should contain Castle TV", providers.any { it.id == "castle_tv" })
         assertTrue("Should contain Jellyfin", providers.any { it.id == "jellyfin_media_server" })
+        assertFalse("Must NOT contain Internet Archive", providers.any { it.id == "internet_archive" })
 
         val castle = providers.first { it.id == "castle_tv" }
         assertFalse("Castle TV should remain disabled by default due to encryption/auth restrictions", castle.isEnabled)
 
         // Check PluginRegistry integration
         val plugins = PluginRegistry.Default.plugins.value
-        assertTrue("Internet Archive should be registered as UniversalPlugin", plugins.any { it.name == "Internet Archive" })
+        assertFalse("Internet Archive must NOT be registered as UniversalPlugin", plugins.any { it.name == "Internet Archive" })
         assertTrue("Wikimedia Commons should be registered as UniversalPlugin", plugins.any { it.name == "Wikimedia Commons" })
     }
 
@@ -270,14 +269,6 @@ class StreamingSourceManagerTest {
 
     @Test
     fun testProviderCapabilitiesAndMetadata() {
-        val ia = InternetArchiveProvider()
-        assertEquals("internet_archive", ia.id)
-        assertEquals("Internet Archive", ia.name)
-        assertTrue(ia.supportedTypes.contains(MediaType.MOVIE))
-        assertTrue(ia.capabilities.supportsDirectPlayback)
-        assertTrue(ia.capabilities.supportsSearch)
-        assertTrue(ia.capabilities.supportsSubtitles)
-
         val wiki = WikimediaCommonsProvider()
         assertEquals("wikimedia_commons", wiki.id)
         assertEquals("Wikimedia Commons", wiki.name)
@@ -288,5 +279,31 @@ class StreamingSourceManagerTest {
         val metaManager = StreamingMetadataManager.getInstance()
         assertNotNull(metaManager)
         assertNotNull(metaManager.getTraktClient())
+    }
+
+    @Test
+    fun testWikimediaStreamRejectionForCommercialMovies() = kotlinx.coroutines.runBlocking {
+        val wiki = WikimediaCommonsProvider()
+        // Commercial movie queries must return empty list to prevent wrong video playback
+        val streams = wiki.getStreamItems(mediaId = "550", title = "Fight Club")
+        assertTrue("Wikimedia must return empty stream list for commercial movie titles", streams.isEmpty())
+
+        // ContentIdentityVerifier must reject any Wikimedia stream URL
+        val testItem = com.euthopiar.core.streams.StreamItem(
+            name = "Inception Clip",
+            title = "Inception",
+            url = "https://upload.wikimedia.org/wikipedia/commons/1/1a/Inception.webm",
+            addonName = "Wikimedia",
+            addonId = "wikimedia_commons"
+        )
+        val hints = com.euthopiar.core.model.MatchHints(
+            tmdbId = 27205,
+            titles = setOf("Inception"),
+            year = 2010,
+            type = com.euthopiar.core.model.ContentType.MOVIE
+        )
+        val decision = com.euthopiar.core.provider.source.ContentIdentityVerifier.verify(hints, testItem)
+        assertEquals("Wikimedia URL must be REJECTED", com.euthopiar.core.provider.source.SourceConfidence.REJECTED, decision.confidence)
+        assertEquals(0.0, decision.score, 0.001)
     }
 }

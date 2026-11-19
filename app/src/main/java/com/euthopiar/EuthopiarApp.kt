@@ -43,6 +43,9 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
         com.euthopiar.core.p2p.P2pSettingsRepository.initialize(this)
         com.euthopiar.core.browser.HeadlessWebResolver.getInstance(this)
 
+        // Asynchronous non-blocking background provider initialization
+        com.euthopiar.core.provider.initialization.BackgroundProviderInitializer.getInstance().startBackgroundInitialization(this)
+
         // Initialize plugins, prefetch DNS, and restore default selected provider across restarts
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -56,7 +59,6 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
                 "api.themoviedb.org",
                 "image.tmdb.org",
                 "graphql.anilist.co",
-                "archive.org",
                 "commons.wikimedia.org"
             )
 

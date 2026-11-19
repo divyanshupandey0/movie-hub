@@ -31,8 +31,8 @@ class WikimediaCommonsProvider(
 
     override val id: String = "wikimedia_commons"
     override val name: String = "Wikimedia Commons"
-    override val description: String = "Open Creative Commons video repository from Wikimedia"
-    override val isEnabled: Boolean = true
+    override val description: String = "Open Creative Commons video repository from Wikimedia (Disabled for commercial movies)"
+    override val isEnabled: Boolean = false
     override val mainUrl: String = "https://commons.wikimedia.org"
     override val supportedTypes: Set<MediaType> = setOf(MediaType.MOVIE)
     override val supportedLanguages: List<String> = listOf("en", "hi", "multi")
@@ -211,11 +211,11 @@ class WikimediaCommonsProvider(
         title: String?,
         year: Int?
     ): List<StreamItem> = withContext(Dispatchers.IO) {
+        // Wikimedia Commons only hosts CC educational media. Commercial movie searches must NEVER return clips.
         val fileTitle = when {
             mediaId.startsWith("wikimedia:") -> mediaId.removePrefix("wikimedia:")
-            !title.isNullOrBlank() -> searchWikimediaFileTitle(title)
-            else -> null
-        } ?: return@withContext emptyList()
+            else -> return@withContext emptyList()
+        }
 
         val canonicalTitle = if (fileTitle.startsWith("File:", ignoreCase = true)) fileTitle else "File:$fileTitle"
         val encoded = URLEncoder.encode(canonicalTitle, "UTF-8")

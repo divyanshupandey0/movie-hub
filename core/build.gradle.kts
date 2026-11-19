@@ -83,4 +83,5 @@ dependencies {
     compileOnly(platform(libs.androidx.compose.bom))
     compileOnly("androidx.compose.runtime:runtime")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

@@ -39,7 +39,6 @@ class ContentProviderRegistry private constructor() {
 
     private fun registerAuditedProviders() {
         // Register open-access and public domain catalog providers
-        register(InternetArchiveContentProvider())
         register(WikimediaCommonsContentProvider())
         register(JellyfinContentProvider())
 
@@ -91,7 +90,13 @@ class ContentProviderRegistry private constructor() {
      * Executes federated search across all active, enabled discovery providers with timeout protection.
      */
     suspend fun searchAll(query: String, timeoutMs: Long = 8000L): List<MediaItem> = withContext(Dispatchers.IO) {
-        val activeProviders = getEnabledProviders().filter { it.capabilities.supportsSearch }
+        val initializer = com.euthopiar.core.provider.initialization.BackgroundProviderInitializer.getInstance()
+        val allEnabled = getEnabledProviders().filter { it.capabilities.supportsSearch }
+        val activeProviders = if (allEnabled.any { initializer.isProviderReady(it.id) }) {
+            allEnabled.filter { initializer.isProviderReady(it.id) || initializer.getProviderState(it.id) == com.euthopiar.core.provider.initialization.ProviderLifecycleState.NOT_INITIALIZED }
+        } else {
+            allEnabled
+        }
         coroutineScope {
             val deferred = activeProviders.map { provider ->
                 async {

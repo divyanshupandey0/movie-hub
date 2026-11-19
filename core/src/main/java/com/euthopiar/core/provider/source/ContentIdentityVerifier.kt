@@ -35,6 +35,30 @@ object ContentIdentityVerifier {
             )
         }
 
+        // 0. Wikimedia Commons / placeholder URL rejection
+        val streamUrl = stream.url.orEmpty()
+        if (streamUrl.contains("commons.wikimedia.org", ignoreCase = true) || streamUrl.contains("upload.wikimedia.org", ignoreCase = true)) {
+            return VerificationDecision(
+                confidence = SourceConfidence.REJECTED,
+                score = 0.0,
+                reason = "Wikimedia Commons does not host licensed commercial movies or TV series"
+            )
+        }
+
+        // 0b. Trailer / sample / short clip rejection for full movie or episode requests
+        val trailerRegex = Regex(
+            """(?:^|[^a-zA-Z0-9]|(?<=[a-z])(?=[A-Z]))(trailer|teaser|preview|promo|sample|behind[\s_.-]*the[\s_.-]*scenes|bts|featurette|clip|scene|making[\s_.-]*of|interview|excerpt|short[\s_.-]*film|mini[\s_.-]*doc|recap|review)(?:$|[^a-zA-Z0-9]|(?<=[a-z])(?=[A-Z]))""",
+            RegexOption.IGNORE_CASE
+        )
+        if ((trailerRegex.containsMatchIn(streamLabel) || trailerRegex.containsMatchIn(streamUrl)) &&
+            !hints.titles.any { trailerRegex.containsMatchIn(it) }) {
+            return VerificationDecision(
+                confidence = SourceConfidence.REJECTED,
+                score = 0.0,
+                reason = "Trailer, teaser, preview, sample or short clip detected on full content request"
+            )
+        }
+
         // 1. Movie target vs TV marker contradiction check
         if (hints.type == ContentType.MOVIE) {
             val hasTvMarkers = Regex("""\bS\d{1,2}[\s._-]*E\d{1,3}\b""", RegexOption.IGNORE_CASE).containsMatchIn(streamLabel) ||

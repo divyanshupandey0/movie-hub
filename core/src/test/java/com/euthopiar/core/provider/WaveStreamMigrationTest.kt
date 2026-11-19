@@ -38,7 +38,7 @@ class WaveStreamMigrationTest {
     @Test
     fun testContentProviderRegistryCategoriesAndCount() {
         val allProviders = contentRegistry.getAllProviders()
-        assertTrue("Content registry must contain all 47+ inventory entries + open providers", allProviders.size >= 50)
+        assertTrue("Content registry must contain all 47+ inventory entries + open providers", allProviders.size >= 49)
 
         // Verify all 5 categories are represented
         for (category in ProviderCategory.values()) {
@@ -68,13 +68,12 @@ class WaveStreamMigrationTest {
             "src_plaviohd",
             "src_torrentio",
             "src_mediafusion",
-            "src_internet_archive",
             "src_wikimedia_commons",
             "src_custom_stream",
             "src_jellyfin"
         )
 
-        assertEquals("StreamingSourceRegistry must strictly contain the 7 authorized stream source services", 7, allServices.size)
+        assertEquals("StreamingSourceRegistry must strictly contain the 6 authorized stream source services", 6, allServices.size)
         allServices.forEach { service ->
             assertTrue("Service ${service.id} must be in authorized whitelist", allowedServiceIds.contains(service.id))
         }
