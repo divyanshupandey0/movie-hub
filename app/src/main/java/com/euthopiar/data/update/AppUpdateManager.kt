@@ -100,6 +100,8 @@ sealed interface ApkDownloadState {
 
 /**
  * Checks if remote version is newer than installed version.
+ * Prioritizes numerical comparison on versionCode when available.
+ * An update is available ONLY when remoteVersionCode > currentVersionCode.
  */
 fun isRemoteUpdateAvailable(
     currentVersionCode: Int,
@@ -112,22 +114,27 @@ fun isRemoteUpdateAvailable(
     val cleanCurrent = currentVersionName.trim().removePrefix("v").removePrefix("V")
     val cleanRemote = remoteVersionName.trim().removePrefix("v").removePrefix("V")
 
-    // If version names are identical, user already has this release installed.
-    if (cleanCurrent.isNotBlank() && cleanCurrent.equals(cleanRemote, ignoreCase = true)) {
-        // Only return true if remote versionCode is strictly higher than installed
-        return remoteVersionCode > currentVersionCode && currentVersionCode > 0
+    // 1. Strict numerical comparison when both version codes are valid positive numbers (> 0)
+    if (remoteVersionCode > 0 && currentVersionCode > 0) {
+        // Show update ONLY if remoteVersionCode is strictly greater than installed versionCode
+        if (remoteVersionCode <= currentVersionCode) {
+            return false
+        }
+        // Guard against corrupted remote metadata: remote versionName must not be semantically older
+        if (cleanCurrent.isNotBlank() && cleanRemote.isNotBlank()) {
+            if (isRemoteVersionNewer(cleanRemote, cleanCurrent)) {
+                return false
+            }
+        }
+        return true
     }
 
-    // 1. Numerical comparison on versionCode if both are valid positive integers
-    if (remoteVersionCode > 0 && currentVersionCode > 0) {
-        if (remoteVersionCode > currentVersionCode) {
-            // Guard against flawed inferred version code: remote versionName must not be semantically older
-            return !isRemoteVersionNewer(cleanRemote, cleanCurrent)
-        }
+    // 2. If version names are identical and remote versionCode is not higher, user already has this release
+    if (cleanCurrent.isNotBlank() && cleanCurrent.equals(cleanRemote, ignoreCase = true)) {
         return false
     }
 
-    // 2. Fallback: semantic comparison on versionName
+    // 3. Fallback: semantic comparison on versionName only when versionCode is missing or non-positive
     return isRemoteVersionNewer(currentVersionName, remoteVersionName)
 }
 
@@ -318,30 +325,42 @@ class AppUpdateManager private constructor(private val context: Context) {
             }
         }
 
+        val explicitJsonCode = json.optInt("versionCode", 0).takeIf { it > 0 }
+            ?: json.optInt("version_code", 0).takeIf { it > 0 }
+
+        // Support explicit versionCode in release notes (including markdown formatted **Version Code:** `116`),
+        // release title, or asset/tag names
+        val explicitVersionCode = try {
+            explicitJsonCode ?: run {
+                val body = json.optString("body", "")
+                val title = json.optString("name", "")
+                // Regex matches formats: "**Version Code:** `116`", "versionCode: 116", "build: 116", "vc: 116", etc.
+                val regex = Regex("""(?i)(?:version[\s_-]*code|build[\s_-]*(?:number|code)?|vc|code)\s*[:=*\s`]*\s*(\d+)""")
+                regex.find(body)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: regex.find(title)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: run {
+                        val tagCode = tagName.substringAfter("+", "").toIntOrNull()
+                            ?: tagName.substringAfterLast("-", "").toIntOrNull()
+                        tagCode
+                    }
+            }
+        } catch (_: Exception) {
+            null
+        }
+
         val inferredVersionCode = try {
             val parts = versionName.split(".")
             val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
             val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
             val patch = parts.getOrNull(2)?.substringBefore("-")?.toIntOrNull() ?: 0
             when {
+                major == 1 && minor == 0 -> 100 + patch
                 major == 1 && minor == 1 -> 110 + patch // v1.1.0 -> 110, v1.1.1 -> 111, v1.1.2 -> 112, v1.1.3 -> 113
-                major == 2 && minor == 0 && patch == 1 -> 114 // v2.0.1 -> 114
-                major == 2 && minor == 0 && patch == 2 -> 115 // v2.0.2 -> 115
+                major == 2 && minor == 0 -> 113 + patch // v2.0.1 -> 114, v2.0.2 -> 115, v2.0.3 -> 116, v2.0.4 -> 117
                 else -> (major * 100) + (minor * 10) + patch
             }
         } catch (_: Exception) {
             0
-        }
-
-        // Support explicit versionCode in release notes, release title, or asset name
-        val explicitVersionCode = try {
-            val body = json.optString("body", "")
-            val title = json.optString("name", "")
-            val regex = Regex("""(?i)\b(?:versionCode|code|build|vc)[:=\s_-]+(\d+)\b""")
-            regex.find(body)?.groupValues?.get(1)?.toIntOrNull()
-                ?: regex.find(title)?.groupValues?.get(1)?.toIntOrNull()
-        } catch (_: Exception) {
-            null
         }
 
         val resolvedVersionCode = explicitVersionCode ?: inferredVersionCode

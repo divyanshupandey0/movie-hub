@@ -1,5 +1,7 @@
 package com.euthopiar.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -51,6 +53,7 @@ import com.euthopiar.R
 import com.euthopiar.data.update.ApkDownloadState
 import com.euthopiar.data.update.AppUpdateManager
 import com.euthopiar.data.update.ReleaseInfo
+import com.euthopiar.data.update.isRemoteUpdateAvailable
 import com.euthopiar.data.update.isRemoteVersionNewer
 import com.euthopiar.ui.navigation.LocalNavbarVisible
 import com.euthopiar.ui.settings.components.settingsPressable
@@ -326,8 +329,14 @@ fun UpdateInfoDialog(
     val context = LocalContext.current
     val updateManager = remember(context) { AppUpdateManager.getInstance(context) }
     val scrollState = rememberScrollState()
-    val isNewerUpdate = remember(currentVersion, release.tagName) {
-        isRemoteVersionNewer(currentVersion, release.tagName)
+    val isNewerUpdate = remember(currentVersion, release.tagName, release.versionCode) {
+        val curCode = updateManager.getCurrentVersionCode()
+        isRemoteUpdateAvailable(
+            currentVersionCode = curCode,
+            remoteVersionCode = release.versionCode,
+            currentVersionName = currentVersion,
+            remoteVersionName = release.versionName
+        )
     }
 
     val formattedSize = remember(release.apkSizeBytes) {
@@ -975,6 +984,13 @@ fun UpdateInfoDialog(
                                 Color(0xFFFFB300).copy(alpha = 0.45f)
                             )
                         )
+                    } else if (!isNewerUpdate && !isReadyToInstall && downloadState !is ApkDownloadState.Error) {
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color(0xFF262012),
+                                Color(0xFF1E190E)
+                            )
+                        )
                     } else {
                         Brush.horizontalGradient(
                             listOf(
@@ -985,6 +1001,8 @@ fun UpdateInfoDialog(
                         )
                     }
 
+                    val isPrimaryActive = isNewerUpdate || isReadyToInstall || downloadState is ApkDownloadState.Error
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -993,7 +1011,7 @@ fun UpdateInfoDialog(
                             .background(primaryButtonBrush)
                             .border(
                                 width = 0.5.dp,
-                                color = Color(0xFFFFF2B2).copy(alpha = 0.60f),
+                                color = if (isPrimaryActive) Color(0xFFFFF2B2).copy(alpha = 0.60f) else Color(0xFFFFD54F).copy(alpha = 0.35f),
                                 shape = CircleShape
                             )
                             .settingsPressable(
@@ -1003,8 +1021,15 @@ fun UpdateInfoDialog(
                                         onTriggerInstall((downloadState as ApkDownloadState.ReadyToInstall).apkFile, release.htmlUrl)
                                     } else if (downloadState is ApkDownloadState.Error) {
                                         onDownloadAndInstall(release)
-                                    } else {
+                                    } else if (isNewerUpdate && release.apkDownloadUrl != null) {
                                         onDownloadAndInstall(release)
+                                    } else if (!isNewerUpdate) {
+                                        dismissWithAnim()
+                                    } else {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
                                     }
                                 }
                             ),
@@ -1035,9 +1060,11 @@ fun UpdateInfoDialog(
                                 val primaryText = when {
                                     isReadyToInstall -> "INSTALL UPDATE"
                                     downloadState is ApkDownloadState.Error -> "RETRY DOWNLOAD"
-                                    release.apkDownloadUrl != null -> "DOWNLOAD UPDATE"
+                                    isNewerUpdate && release.apkDownloadUrl != null -> "DOWNLOAD UPDATE"
+                                    !isNewerUpdate -> "ALREADY UP TO DATE"
                                     else -> "VIEW RELEASE PAGE"
                                 }
+                                val primaryTextColor = if (isPrimaryActive) Color(0xFF141005) else Color(0xFFFFD54F)
                                 Text(
                                     text = primaryText,
                                     style = TextStyle(
@@ -1045,7 +1072,7 @@ fun UpdateInfoDialog(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.5.sp,
                                         letterSpacing = 0.08.em,
-                                        color = Color(0xFF141005)
+                                        color = primaryTextColor
                                     )
                                 )
                             }

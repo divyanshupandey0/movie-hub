@@ -353,7 +353,7 @@ fun UpdateSettingsPage(
                 },
                 trailingContent = {
                     SettingsPillButton(
-                        text = if (displayRelease.apkDownloadUrl != null) "Download" else "Open",
+                        text = if (availableRelease != null && displayRelease.apkDownloadUrl != null) "Download" else "View",
                         isSolidWhite = false,
                         onClick = {
                             activeDialogRelease = displayRelease

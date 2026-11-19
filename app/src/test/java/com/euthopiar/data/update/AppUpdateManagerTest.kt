@@ -218,6 +218,95 @@ class AppUpdateManagerTest {
                 remoteVersionName = "1.1.3"
             )
         )
+
+        // Scenario 1: Installed 2.0.3 (116), Latest 2.0.3 (116): No update popup
+        assertFalse(
+            "Scenario 1: Installed 2.0.3 (116), Latest 2.0.3 (116) must NOT show update popup",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 116,
+                remoteVersionCode = 116,
+                currentVersionName = "2.0.3",
+                remoteVersionName = "2.0.3"
+            )
+        )
+
+        // Scenario 2: Installed 2.0.2 (115), Latest 2.0.3 (116): Show update popup
+        assertTrue(
+            "Scenario 2: Installed 2.0.2 (115), Latest 2.0.3 (116) MUST show update popup",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 115,
+                remoteVersionCode = 116,
+                currentVersionName = "2.0.2",
+                remoteVersionName = "2.0.3"
+            )
+        )
+
+        // Scenario 3: Installed 2.0.4 (117), Latest 2.0.3 (116): No update popup
+        assertFalse(
+            "Scenario 3: Installed 2.0.4 (117), Latest 2.0.3 (116) must NOT show update popup",
+            isRemoteUpdateAvailable(
+                currentVersionCode = 117,
+                remoteVersionCode = 116,
+                currentVersionName = "2.0.4",
+                remoteVersionName = "2.0.3"
+            )
+        )
+    }
+
+    @Test
+    fun testVersion203ReleaseParsingFromGitHubApiWithMarkdown() {
+        // Test parsing exact real-world markdown body with bold and backticks
+        val githubApiResponse = JSONObject().apply {
+            put("tag_name", "v2.0.3")
+            put("name", "MOVIE HUB v2.0.3 – Stable Update")
+            put("body", "### MOVIE HUB v2.0.3 – Stable Update\n\n- **Package:** `com.euthopiar`\n- **Version Name:** `2.0.3`\n- **Version Code:** `116`\n\n\n**Full Changelog**: https://github.com/divyanshupandey0/movie-hub/compare/v2.0.2...v2.0.3")
+            put("html_url", "https://github.com/divyanshupandey0/movie-hub/releases/tag/v2.0.3")
+            put("published_at", "2026-11-19T09:31:47Z")
+            put("prerelease", false)
+            val assetsArray = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("name", "MOVIE-HUB-v2.0.3.apk")
+                    put("browser_download_url", "https://github.com/divyanshupandey0/movie-hub/releases/download/v2.0.3/MOVIE-HUB-v2.0.3.apk")
+                    put("size", 50547742L)
+                })
+            }
+            put("assets", assetsArray)
+        }
+
+        val releaseInfo = updateManager.parseGitHubReleaseApi(githubApiResponse)
+        assertEquals("v2.0.3", releaseInfo.tagName)
+        assertEquals("2.0.3", releaseInfo.versionName)
+        assertEquals(116, releaseInfo.versionCode)
+        assertEquals("MOVIE HUB v2.0.3 – Stable Update", releaseInfo.releaseTitle)
+        assertEquals("https://github.com/divyanshupandey0/movie-hub/releases/download/v2.0.3/MOVIE-HUB-v2.0.3.apk", releaseInfo.apkDownloadUrl)
+        assertEquals(50547742L, releaseInfo.apkSizeBytes)
+    }
+
+    @Test
+    fun testVersion203InferredVersionCodeWithoutExplicitBody() {
+        // When release body has no explicit version code, inference should produce 116 for 2.0.3
+        val githubApiResponse = JSONObject().apply {
+            put("tag_name", "v2.0.3")
+            put("name", "MOVIE HUB v2.0.3")
+            put("body", "General bug fixes")
+        }
+
+        val releaseInfo = updateManager.parseGitHubReleaseApi(githubApiResponse)
+        assertEquals("2.0.3", releaseInfo.versionName)
+        assertEquals(116, releaseInfo.versionCode)
+    }
+
+    @Test
+    fun testVersion204InferredVersionCodeWithoutExplicitBody() {
+        val githubApiResponse = JSONObject().apply {
+            put("tag_name", "v2.0.4")
+            put("name", "MOVIE HUB v2.0.4")
+            put("body", "Next update")
+        }
+
+        val releaseInfo = updateManager.parseGitHubReleaseApi(githubApiResponse)
+        assertEquals("2.0.4", releaseInfo.versionName)
+        assertEquals(117, releaseInfo.versionCode)
     }
 
     @Test

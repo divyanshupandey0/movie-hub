@@ -865,7 +865,10 @@ fun HomeScreen(
                 currentVersion = available.currentVersion,
                 downloadState = downloadState,
                 hazeState = homeHazeState,
-                onDismiss = { showUpdateDialog = false },
+                onDismiss = {
+                    showUpdateDialog = false
+                    updateManager.dismissBannerForSession()
+                },
                 onDownloadAndInstall = { rel -> updateManager.downloadAndInstallUpdate(rel) },
                 onTriggerInstall = { file, fallbackUrl -> updateManager.triggerInstallApk(file, fallbackUrl) },
                 onSkipVersion = { version ->
