@@ -149,3 +149,97 @@ data class CloudUserAddon(
     @SerialName("client_updated_at_ms") val clientUpdatedAtMs: Long = System.currentTimeMillis(),
     @SerialName("updated_at") val updatedAt: String? = null
 )
+
+@Serializable
+data class AppConfigEntry(
+    val key: String,
+    val value: kotlinx.serialization.json.JsonObject,
+    val description: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+
+@Serializable
+data class RemoteSourceEntry(
+    val id: String,
+    @SerialName("provider_id") val providerId: String,
+    @SerialName("media_id") val mediaId: String,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val title: String? = null,
+    val url: String,
+    val format: String = "auto",
+    val quality: String = "1080p",
+    @SerialName("audio_languages") val audioLanguages: List<String> = emptyList(),
+    @SerialName("has_hindi_audio") val hasHindiAudio: Boolean = false,
+    @SerialName("is_hindi_dubbed") val isHindiDubbed: Boolean = false,
+    @SerialName("is_multi_audio") val isMultiAudio: Boolean = false,
+    @SerialName("is_enabled") val isEnabled: Boolean = true,
+    @SerialName("priority_score") val priorityScore: Int = 0,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+
+@Serializable
+data class RemoteSourceHealthEntry(
+    @SerialName("provider_id") val providerId: String,
+    val status: String = "ACTIVE",
+    @SerialName("latency_ms") val latencyMs: Long = 0L,
+    @SerialName("success_rate") val successRate: Double = 1.0,
+    @SerialName("last_checked_at") val lastCheckedAt: String? = null,
+    @SerialName("error_message") val errorMessage: String? = null
+)
+
+@Serializable
+data class RemoteSourceFailureEntry(
+    val id: String? = null,
+    @SerialName("source_id") val sourceId: String? = null,
+    @SerialName("provider_id") val providerId: String,
+    @SerialName("media_id") val mediaId: String,
+    @SerialName("error_code") val errorCode: String? = null,
+    @SerialName("error_message") val errorMessage: String? = null,
+    @SerialName("retry_count") val retryCount: Int = 0,
+    @SerialName("occurred_at") val occurredAt: String? = null
+)
+
+@Serializable
+data class RemotePlaybackSessionEntry(
+    val id: String,
+    @SerialName("user_id") val userId: String? = null,
+    @SerialName("media_id") val mediaId: String,
+    val season: Int? = null,
+    val episode: Int? = null,
+    @SerialName("active_source_id") val activeSourceId: String? = null,
+    @SerialName("active_provider_id") val activeProviderId: String? = null,
+    @SerialName("selected_audio_language") val selectedAudioLanguage: String = "hi",
+    @SerialName("selected_quality") val selectedQuality: String = "1080p",
+    @SerialName("playback_position_ms") val playbackPositionMs: Long = 0L,
+    @SerialName("duration_ms") val durationMs: Long = 0L,
+    @SerialName("is_locked") val isLocked: Boolean = true,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("last_heartbeat_at") val lastHeartbeatAt: String? = null,
+    @SerialName("ended_at") val endedAt: String? = null
+)
+
+@Serializable
+data class RemoteSourceAnalyticsEntry(
+    val id: String? = null,
+    @SerialName("event_type") val eventType: String,
+    @SerialName("provider_id") val providerId: String? = null,
+    @SerialName("duration_ms") val durationMs: Long? = null,
+    val success: Boolean = true,
+    @SerialName("network_type") val networkType: String? = null,
+    @SerialName("effective_bandwidth_kbps") val effectiveBandwidthKbps: Long? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class RemotePlaybackReportEntry(
+    val id: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("media_id") val mediaId: String,
+    @SerialName("buffering_count") val bufferingCount: Int = 0,
+    @SerialName("total_buffering_time_ms") val totalBufferingTimeMs: Long = 0L,
+    @SerialName("switched_sources") val switchedSources: Boolean = false,
+    @SerialName("switch_reason") val switchReason: String? = null,
+    @SerialName("reported_at") val reportedAt: String? = null
+)

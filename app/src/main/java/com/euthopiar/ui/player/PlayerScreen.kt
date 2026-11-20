@@ -897,7 +897,7 @@ fun PlayerScreen(
                 onSelectSpeed = { speed -> viewModel.setPlaybackSpeed(speed) },
                 audioTracks = uiState.availableAudioTracks,
                 selectedAudioTrack = uiState.selectedAudioTrack,
-                onSelectAudioTrack = { track -> viewModel.selectAudioTrack(track) },
+                onSelectAudioTrack = { track -> viewModel.selectAudioTrack(track, isUserExplicit = true) },
                 dialogueBoostLevel = uiState.dialogueBoostLevel,
                 onSelectDialogueBoost = { boost -> viewModel.setDialogueBoostLevel(boost) },
                 isNightModeDrcEnabled = uiState.isNightModeDrcEnabled,

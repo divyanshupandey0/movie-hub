@@ -480,11 +480,9 @@ class StreamParserAndSortingTest {
         // 3-8 Mbps effective (4.2 - 11.2 Mbps estimated) -> 720p
         assertEquals("720p", estimator.decideAutoQuality(6_000_000L))
 
-        // 8-22 Mbps effective (11.2 - 30.8 Mbps estimated) -> 1080p
+        // >=8 Mbps effective (>=11.2 Mbps estimated) -> 1080p (clamped max, never 4K)
         assertEquals("1080p", estimator.decideAutoQuality(15_000_000L))
-
-        // >22 Mbps effective (>30.8 Mbps estimated) -> 4K
-        assertEquals("4K", estimator.decideAutoQuality(40_000_000L))
+        assertEquals("1080p", estimator.decideAutoQuality(40_000_000L))
     }
 
     @Test

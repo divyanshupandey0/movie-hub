@@ -130,18 +130,18 @@ class BandwidthEstimator private constructor() {
 
     /**
      * Maps estimated bandwidth to quality tiers with 1.40x VBR headroom factor:
-     * - < 3 Mbps -> 480p
-     * - 3-8 Mbps -> 720p
-     * - 8-22 Mbps -> 1080p
-     * - > 22 Mbps -> 4K
+     * - < 1.5 Mbps -> 360p (Very weak mobile network)
+     * - 1.5-3 Mbps -> 480p (Weak 4G)
+     * - 3-8 Mbps -> 720p (Normal 4G)
+     * - >= 8 Mbps -> 1080p (Strong connection, clamped to 1080p maximum, never 4K)
      */
     fun decideAutoQuality(estimatedBps: Long): String {
         val effectiveRate = estimatedBps / 1.40
         return when {
+            effectiveRate < 1_500_000L -> "360p"
             effectiveRate < 3_000_000L -> "480p"
             effectiveRate < 8_000_000L -> "720p"
-            effectiveRate <= 22_000_000L -> "1080p"
-            else -> "4K"
+            else -> "1080p"
         }
     }
 

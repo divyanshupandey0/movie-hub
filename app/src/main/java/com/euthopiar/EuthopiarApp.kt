@@ -33,6 +33,7 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
 
         // Initialize 50MB HTTP disk cache and connection pool
         DohDns.initHttpCache(cacheDir)
+        com.euthopiar.core.cache.SmartCacheManager.getInstance().initialize(this)
         com.euthopiar.ui.player.sequential.SequentialStreamManager.cleanOrphanedCache(this)
 
         // Synchronously initialize JsPluginStorage, AddonRepository, P2P engine, and StreamingSourceManager instances

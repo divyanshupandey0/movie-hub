@@ -564,7 +564,16 @@ class PlayerViewModel(
         }
         viewModelScope.launch {
             preferencesRepository.preferredAudioLanguage.collect { lang ->
-                if (lang.isNotBlank()) userPreferredAudioLanguage = lang
+                if (lang.isNotBlank()) {
+                    userPreferredAudioLanguage = lang
+                    val pLang = if (lang.equals("hi", true) || lang.equals("hin", true)) "hi" else lang
+                    val sLang = if (pLang == "hi") "hin" else userSecondaryAudioLanguage.ifBlank { "en" }
+                    exoPlayer?.let { player ->
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setPreferredAudioLanguages(pLang, sLang)
+                            .build()
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -657,18 +666,18 @@ class PlayerViewModel(
         val requestedBytes = bufferMb.coerceIn(25, 100) * 1024 * 1024
         val targetBytes = requestedBytes.coerceAtMost(maxRamBytes)
         val bufferScale = bufferMb.coerceIn(25, 100) / 50f
-        val minBufferMs = (8_000 * bufferScale).toInt().coerceIn(8_000, 30_000)
-        val maxBufferMs = (30_000 * bufferScale).toInt().coerceIn(15_000, 45_000)
+        val minBufferMs = (15_000 * bufferScale).toInt().coerceIn(15_000, 35_000)
+        val maxBufferMs = (35_000 * bufferScale).toInt().coerceIn(30_000, 60_000)
 
         val loadControl = DefaultLoadControl.Builder()
             .setTargetBufferBytes(targetBytes)
             .setBufferDurationsMs(
                 /* minBufferMs = */ minBufferMs,
                 /* maxBufferMs = */ maxBufferMs,
-                /* bufferForPlaybackMs = */ 500,
-                /* bufferForPlaybackAfterRebufferMs = */ 1_000
+                /* bufferForPlaybackMs = */ 2_000,
+                /* bufferForPlaybackAfterRebufferMs = */ 4_000
             )
-            .setPrioritizeTimeOverSizeThresholds(false)
+            .setPrioritizeTimeOverSizeThresholds(true)
             .setBackBuffer(15_000, true)
             .build()
 
@@ -832,7 +841,9 @@ class PlayerViewModel(
                     .setAllowVideoNonSeamlessAdaptiveness(true)
                     .setAllowAudioMixedMimeTypeAdaptiveness(true)
                     .setAllowAudioMixedChannelCountAdaptiveness(true)
-                    .setPreferredAudioLanguages("hi", "hin", "ta", "tam", "te", "tel", "ml", "mal", "bn", "ben", "en", "eng")
+                    .setMaxVideoSize(1920, 1080)
+                    .setMaxVideoBitrate(12_000_000)
+                    .setPreferredAudioLanguages("hi", "hin")
             )
         }
 
@@ -943,6 +954,8 @@ class PlayerViewModel(
                         _uiState.update { it.copy(isBuffering = true) }
                     }
                     Player.STATE_READY -> {
+                        bufferingStallStartTime = null
+                        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekCompleted(player.currentPosition)
                         val deferredSeek = pendingDeferredSeekMs
                         if (deferredSeek != null && deferredSeek > 0L) {
                             pendingDeferredSeekMs = null
@@ -954,15 +967,17 @@ class PlayerViewModel(
                         starvationConsecutiveSeconds = 0
                         val duration = player.duration.takeIf { it > 0 } ?: _uiState.value.durationMs
 
-                        // Honeypot Resilience: detect short warning/honeypot clips (< 95s) for full Movies/TV/Anime (only if auto-selected)
-                        if (_uiState.value.smartFailoverEnabled && !userExplicitServerSelection && duration in 1000L..95000L && _uiState.value.mediaType in listOf(MediaType.MOVIE, MediaType.TV_SERIES, MediaType.ANIME)) {
+                        // Honeypot & Promo Resilience: detect short warning/honeypot/trailer clips for full Movies/TV/Anime (only if auto-selected)
+                        val isTrailerOrClip = (_uiState.value.mediaType == MediaType.MOVIE && duration in 1000L..240000L) ||
+                                (_uiState.value.mediaType in listOf(MediaType.TV_SERIES, MediaType.ANIME) && duration in 1000L..120000L)
+                        if (_uiState.value.smartFailoverEnabled && !userExplicitServerSelection && isTrailerOrClip) {
                             val badServer = _uiState.value.selectedServer
                             if (badServer != null && badServer.id !in failedServerIds) {
                                 failedServerIds.add(badServer.id)
                                 val remaining = _uiState.value.availableServers.filterNot { it.id in failedServerIds }
                                 if (remaining.isNotEmpty()) {
                                     val nextServer = remaining.first()
-                                    showToast("Notice/warning clip detected (${duration / 1000}s). Switching to ${nextServer.serverName}...")
+                                    showToast("Notice/trailer clip detected (${duration / 1000}s). Switching to ${nextServer.serverName}...")
                                     selectServer(nextServer)
                                     return
                                 }
@@ -1470,6 +1485,32 @@ class PlayerViewModel(
         targetEpisode: Int? = null,
         streamTitleOrFilename: String? = null
     ): Boolean {
+        // Guard against HTTP 429 Too Many Requests, error pages, or promotional screen video files
+        val lowerText = "${streamTitleOrFilename.orEmpty()} ${streamMediaId.orEmpty()}".lowercase()
+        if (lowerText.contains("too many requests") ||
+            lowerText.contains("rate limit") ||
+            lowerText.contains("error 429") ||
+            lowerText.contains("access denied") ||
+            lowerText.contains("attention required") ||
+            lowerText.contains("ddos protection") ||
+            lowerText.contains("cloudflare") ||
+            lowerText.contains("recaptcha") ||
+            lowerText.contains("hcaptcha")
+        ) {
+            android.util.Log.e("PlayerViewModel", "REJECTING ERROR/PROMOTIONAL STREAM: detected rate-limit/error token in '$lowerText'")
+            return false
+        }
+
+        // Exclude promotional clips, trailers, teasers, samples, and recap reels from main episode playback
+        if (targetSeason != null || targetEpisode != null || _uiState.value.mediaType == com.euthopiar.core.model.MediaType.MOVIE) {
+            val hasPromoToken = Regex("""\b(?:trailer|teaser|sample|preview|recap|featurette|promo|clip)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lowerText)
+            val isYoutubeTrailer = (lowerText.contains("youtube.com") || lowerText.contains("youtu.be")) && !lowerText.contains("m3u8")
+            if (hasPromoToken || isYoutubeTrailer) {
+                android.util.Log.e("PlayerViewModel", "REJECTING PROMOTIONAL STREAM: detected promo/trailer/sample token in '$lowerText'")
+                return false
+            }
+        }
+
         if (!streamMediaId.isNullOrBlank() && targetMediaId != null) {
             val cleanStream = streamMediaId.removePrefix("tmdb:").removePrefix("tmdb/").substringBefore(':').trim()
             val cleanTarget = targetMediaId.removePrefix("tmdb:").removePrefix("tmdb/").substringBefore(':').trim()
@@ -1500,7 +1541,7 @@ class PlayerViewModel(
         // 3. Title & filename marker validation (guards against wrong video files)
         if (!streamTitleOrFilename.isNullOrBlank()) {
             val titleText = streamTitleOrFilename.trim()
-            val isMovieTarget = _uiState.value.mediaType == com.euthopiar.core.model.MediaType.MOVIE
+            val isMovieTarget = targetSeason == null && targetEpisode == null && _uiState.value.mediaType == com.euthopiar.core.model.MediaType.MOVIE
 
             // If target is a MOVIE, reject any stream having explicit TV season/episode markers (e.g. S01E02)
             if (isMovieTarget) {
@@ -1528,6 +1569,19 @@ class PlayerViewModel(
         val instant = isInstantFailure(error)
         if (instant) {
             android.util.Log.d("PlayerViewModel", "Instant failover triggered (0ms) for error: ${error.errorCodeName} - ${error.message}")
+        }
+        if (com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
+            android.util.Log.w("PlayerViewModel", "fallbackToNextServer blocked: active source is locked or seeking in progress")
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isBuffering = false,
+                    userError = com.euthopiar.ui.util.UserError.SourceUnavailable,
+                    errorMessage = null,
+                    activeSidePanel = PlayerSidePanelType.SOURCES
+                )
+            }
+            return
         }
         if (!_uiState.value.smartFailoverEnabled) {
             android.util.Log.w("PlayerViewModel", "Smart failover disabled; playback error on ${currentServer?.serverName}: ${error.localizedMessage}", error)
@@ -1756,6 +1810,8 @@ class PlayerViewModel(
                 isOfflinePlayback = false
             )
         }
+
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().startSession(mediaId, season, episode)
 
         streamJob = viewModelScope.launch(Dispatchers.IO) {
             val historyId = PlaybackHistoryEntity.buildId(provider, mediaId, season, episode)
@@ -2053,7 +2109,7 @@ class PlayerViewModel(
                                         streamEpisode = s.episode,
                                         targetSeason = currentSeason,
                                         targetEpisode = currentEp,
-                                        streamTitleOrFilename = "${s.serverName} ${s.quality}"
+                                        streamTitleOrFilename = "${s.serverName} ${s.quality} ${s.url}"
                                     )
                                 ) {
                                     android.util.Log.e("PlayerViewModel", "REJECTING MISMATCHED STREAM: stream mediaId=$sMediaId does not match current target=$currId (imdb=$currentImdbId)")
@@ -2128,10 +2184,8 @@ class PlayerViewModel(
                                                         val candidates = _uiState.value.availableServers.filter {
                                                             it.id !in failedServerIds && it.healthCategory != ServerHealthCategory.UNWATCHABLE
                                                         }
-                                                        val hindiEligible = filterHindiEligibleServers(candidates)
-                                                        val bestServer = hindiEligible.maxByOrNull {
-                                                            scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
-                                                        } ?: candidates.maxByOrNull {
+                                                        val eligible = selectLanguageCompliantServers(candidates, currentOriginalLanguage)
+                                                        val bestServer = eligible.maxByOrNull {
                                                             scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
                                                         }?.takeIf { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) > -500.0 }
 
@@ -2158,10 +2212,8 @@ class PlayerViewModel(
                                         val candidates = _uiState.value.availableServers.filter {
                                             it.id !in failedServerIds && it.healthCategory != ServerHealthCategory.UNWATCHABLE
                                         }
-                                        val hindiEligible = filterHindiEligibleServers(candidates)
-                                        val bestServer = hindiEligible.maxByOrNull {
-                                            scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
-                                        } ?: candidates.maxByOrNull {
+                                        val eligible = selectLanguageCompliantServers(candidates, currentOriginalLanguage)
+                                        val bestServer = eligible.maxByOrNull {
                                             scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
                                         }?.takeIf { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) > -500.0 }
 
@@ -2180,34 +2232,6 @@ class PlayerViewModel(
                                                         errorMessage = "No verified Hindi audio source is currently available for this content."
                                                     )
                                                 }
-                                            }
-                                        }
-                                    }
-                                } else if (hasStartedPlayback && !userExplicitServerSelection && !autoUpgradedOnce && curSelected != null) {
-                                    val withinUpgradeWindow = !videoFrameRendered || (System.currentTimeMillis() - playbackStartTimestampMs <= 8_000L)
-                                    if (withinUpgradeWindow && option.id !in failedServerIds && option.healthCategory != ServerHealthCategory.UNWATCHABLE) {
-                                        val prefQualityStr = userDefaultQuality
-                                        val prefHeight = sortPrefHeight
-                                        val curHeight = parseResolutionHeight(curSelected.resolutionLabel.ifBlank { curSelected.streamSource.quality })
-                                        val newHeight = parseResolutionHeight(option.resolutionLabel.ifBlank { option.streamSource.quality })
-                                        val curMatchesPref = if (prefHeight >= 2160) curHeight >= 2160 else curHeight == prefHeight
-                                        val newMatchesPref = if (prefHeight >= 2160) newHeight >= 2160 else newHeight == prefHeight
-                                        val curScore = scoreServerForInitialAutoPlay(curSelected, hasDebrid, prefHeight)
-                                        val newScore = scoreServerForInitialAutoPlay(option, hasDebrid, prefHeight)
-                                        // Upgrade if current stream did NOT match user's preferred quality (or had weaker match confidence)
-                                        // and the newly arrived stream matches preferred quality with a significantly better score (+45).
-                                        val shouldUpgrade = (!curMatchesPref && newMatchesPref && newScore >= curScore + 45.0 && option.streamSource.matchScore >= 0.75) ||
-                                                (curSelected.streamSource.matchScore < 0.80 && option.streamSource.matchScore >= 0.80 && newScore >= curScore + 60.0)
-                                        if (shouldUpgrade) {
-                                            autoUpgradedOnce = true
-                                            fastStartJob?.cancel()
-                                            fastStartJob = null
-                                            android.util.Log.i("PlayerViewModel", "Auto-upgrading initial stream from ${curSelected.label} (score=$curScore) to better match ${option.label} (score=$newScore)")
-                                            withContext(Dispatchers.Main) {
-                                                if (sessionToken != currentPlaybackSessionToken.get()) return@withContext
-                                                val resumePos = (pendingDeferredSeekMs ?: exoPlayer?.currentPosition?.takeIf { it > 0L } ?: resumePosition ?: 0L).coerceAtLeast(0L)
-                                                _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = option) }
-                                                playStreamSource(option.streamSource, collectedSubtitles, seekToPosition = resumePos.takeIf { it > 0L }, sessionToken = sessionToken)
                                             }
                                         }
                                     }
@@ -2403,10 +2427,8 @@ class PlayerViewModel(
                     val candidates = _uiState.value.availableServers.filter {
                         it.id !in failedServerIds && it.healthCategory != ServerHealthCategory.UNWATCHABLE
                     }
-                    val hindiEligible = filterHindiEligibleServers(candidates)
-                    val bestServer = hindiEligible.maxByOrNull {
-                        scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
-                    } ?: candidates.maxByOrNull {
+                    val eligible = selectLanguageCompliantServers(candidates, currentOriginalLanguage)
+                    val bestServer = eligible.maxByOrNull {
                         scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight)
                     }?.takeIf { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) > -500.0 }
 
@@ -3361,9 +3383,17 @@ class PlayerViewModel(
             .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
             .setPreferredVideoMimeType(null)
         if (!userDefaultQuality.equals("Auto", ignoreCase = true) && sortPrefHeight > 0) {
-            trackParamsBuilder.setMaxVideoSize(Int.MAX_VALUE, sortPrefHeight)
+            val clampedHeight = minOf(sortPrefHeight, 1080)
+            trackParamsBuilder.setMaxVideoSize(1920, clampedHeight)
         } else {
-            trackParamsBuilder.clearVideoSizeConstraints()
+            trackParamsBuilder.setMaxVideoSize(1920, 1080)
+        }
+        trackParamsBuilder.setMaxVideoBitrate(12_000_000)
+        val prefAudioLang = userPreferredAudioLanguage.ifBlank { "hi" }
+        if (prefAudioLang.equals("hi", true) || prefAudioLang.equals("hin", true)) {
+            trackParamsBuilder.setPreferredAudioLanguages("hi", "hin")
+        } else {
+            trackParamsBuilder.setPreferredAudioLanguages(prefAudioLang, userSecondaryAudioLanguage.ifBlank { "en" })
         }
         player.trackSelectionParameters = trackParamsBuilder.build()
 
@@ -3391,6 +3421,8 @@ class PlayerViewModel(
         }
         player.prepare()
         player.playWhenReady = true
+        val sId = activeServer?.id ?: source.serverName.ifBlank { "current" }
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().lockActiveSource(sId, source.url)
     }
 
     private fun extractExoPlayerTracks(tracks: Tracks) {
@@ -3410,7 +3442,7 @@ class PlayerViewModel(
                     val format = group.getTrackFormat(i)
                     val h = resolveTrackHeight(format, i)
                     val bitrate = if (format.bitrate != androidx.media3.common.Format.NO_VALUE && format.bitrate > 0) format.bitrate else null
-                    if (h > 0 || (group.length > 1 && bitrate != null && bitrate > 0)) {
+                    if ((h in 1..1080) || (group.length > 1 && bitrate != null && bitrate > 0 && h <= 1080)) {
                         rawVideoTracks.add(VideoTrackCandidate(groupIndex, i, h, bitrate))
                     }
                 }
@@ -3421,9 +3453,8 @@ class PlayerViewModel(
             heightCounts[cand.height] = (heightCounts[cand.height] ?: 0) + 1
         }
         for (cand in rawVideoTracks) {
+            if (cand.height > 1080) continue
             val baseLabel = when {
-                cand.height >= 2160 -> "4K (2160p)"
-                cand.height >= 1440 -> "2K (1440p)"
                 cand.height >= 1080 -> "1080p (Full HD)"
                 cand.height >= 720 -> "720p (HD)"
                 cand.height >= 480 -> "480p (SD)"
@@ -3583,7 +3614,7 @@ class PlayerViewModel(
                 detectedAudio.firstOrNull { !it.isAuto } ?: detectedAudio.first()
             }
             if (effectiveSelected != null && !effectiveSelected.isAuto) {
-                selectAudioTrack(effectiveSelected)
+                selectAudioTrack(effectiveSelected, isUserExplicit = false)
             }
             _uiState.update {
                 it.copy(
@@ -4073,15 +4104,174 @@ class PlayerViewModel(
     fun filterHindiEligibleServers(servers: List<ServerSourceOption>): List<ServerSourceOption> {
         return servers.filter { option ->
             val src = option.streamSource
-            val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
-            val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
+            val hasVerifiedHindiTrack = src.audioTracks.any { 
+                it.isoCode.equals("hi", true) || 
+                it.isoCode.equals("hin", true) || 
+                it.isoCode.equals("hindi", true) || 
+                it.languageName.contains("hindi", true) ||
+                it.languageName.equals("hi", true) ||
+                it.languageName.equals("hin", true)
+            }
+            val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindiTrack
             if (hasVerifiedNonHindiOnly) return@filter false
 
             val text = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
-            val isExplicitRegionalOnly = text.contains("tamil only") || text.contains("telugu only") || text.contains("malayalam only") || text.contains("kannada only") || text.contains("bengali only")
-            if (isExplicitRegionalOnly) return@filter false
+            
+            // Reject explicit non-Hindi only languages
+            val isExplicitNonHindiOnly = text.contains("english only") || text.contains("eng only") ||
+                    text.contains("tamil only") || text.contains("tam only") ||
+                    text.contains("telugu only") || text.contains("tel only") ||
+                    text.contains("malayalam only") || text.contains("mal only") ||
+                    text.contains("kannada only") || text.contains("kan only") ||
+                    text.contains("bengali only") || text.contains("korean only") ||
+                    text.contains("japanese only") || text.contains("jap only") ||
+                    (text.contains("tamil") && !text.contains("hindi") && !text.contains("multi") && !text.contains("dual")) ||
+                    (text.contains("telugu") && !text.contains("hindi") && !text.contains("multi") && !text.contains("dual")) ||
+                    (text.contains("malayalam") && !text.contains("hindi") && !text.contains("multi") && !text.contains("dual")) ||
+                    (text.contains("korean") && !text.contains("hindi") && !text.contains("multi") && !text.contains("dual")) ||
+                    (text.contains("japanese") && !text.contains("hindi") && !text.contains("multi") && !text.contains("dual"))
+            if (isExplicitNonHindiOnly) return@filter false
 
-            hasVerifiedHindi || text.contains("hindi") || text.contains("hin") || (option.audioBadge?.contains("HIN", true) == true)
+            // Do not confuse subtitles with audio
+            val isSubOnly = text.contains("sub only") || (text.contains("sub") && !text.contains("dub") && !text.contains("audio") && !text.contains("hindi") && !text.contains("multi"))
+            if (isSubOnly) return@filter false
+
+            val hasHindiKeyword = text.contains("hindi") || Regex("""\bhin\b""", RegexOption.IGNORE_CASE).containsMatchIn(text) || (option.audioBadge?.contains("HIN", true) == true)
+            val isMultiWithHindi = (text.contains("multi") || text.contains("dual")) && (hasHindiKeyword || hasVerifiedHindiTrack)
+
+            hasVerifiedHindiTrack || (hasHindiKeyword && !text.contains("non-hindi")) || isMultiWithHindi
+        }
+    }
+
+    fun filterOriginalLanguageServers(
+        servers: List<ServerSourceOption>,
+        originalLanguage: String?
+    ): List<ServerSourceOption> {
+        val orig = originalLanguage?.lowercase()?.trim().orEmpty()
+        if (orig.isBlank()) return emptyList()
+
+        val origIso3 = when (orig) {
+            "en", "eng" -> "eng"
+            "ko", "kor" -> "kor"
+            "ta", "tam" -> "tam"
+            "te", "tel" -> "tel"
+            "ml", "mal" -> "mal"
+            "kn", "kan" -> "kan"
+            "bn", "ben" -> "ben"
+            "ja", "jpn" -> "jpn"
+            "es", "spa" -> "spa"
+            "fr", "fra" -> "fra"
+            "de", "ger", "deu" -> "ger"
+            "it", "ita" -> "ita"
+            "ru", "rus" -> "rus"
+            "zh", "chi", "zho" -> "chi"
+            else -> orig
+        }
+
+        val origKeywords = when (orig) {
+            "en", "eng" -> listOf("english", "eng", "[eng]")
+            "ko", "kor" -> listOf("korean", "kor", "[kor]")
+            "ta", "tam" -> listOf("tamil", "tam", "[tam]")
+            "te", "tel" -> listOf("telugu", "tel", "[tel]")
+            "ml", "mal" -> listOf("malayalam", "mal", "[mal]")
+            "kn", "kan" -> listOf("kannada", "kan", "[kan]")
+            "bn", "ben" -> listOf("bengali", "bangla", "ben", "[ben]")
+            "ja", "jpn" -> listOf("japanese", "jpn", "[jpn]")
+            "es", "spa" -> listOf("spanish", "spa", "esp", "[spa]")
+            "fr", "fra" -> listOf("french", "fra", "vostfr", "[fra]")
+            "de", "ger", "deu" -> listOf("german", "ger", "deu", "[ger]")
+            "it", "ita" -> listOf("italian", "ita", "[ita]")
+            "ru", "rus" -> listOf("russian", "rus", "[rus]")
+            "zh", "chi", "zho" -> listOf("chinese", "chi", "[chi]")
+            else -> listOf(orig)
+        }
+
+        val otherForeignLanguages = listOf(
+            "russian", "rus", "german", "deu", "italian", "ita", "french", "fra",
+            "spanish", "latino", "portuguese", "por", "turkish", "tur", "polish", "pol"
+        ).filterNot { candidate -> origKeywords.any { it.contains(candidate) } }
+
+        return servers.filter { option ->
+            val src = option.streamSource
+            val text = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
+
+            if (src.audioTracks.isNotEmpty()) {
+                val hasOrigTrack = src.audioTracks.any {
+                    val code = it.isoCode.lowercase()
+                    val name = it.languageName.lowercase()
+                    code == orig || code == origIso3 || origKeywords.any { kw -> name.contains(kw) }
+                }
+                if (!hasOrigTrack) return@filter false
+            }
+
+            val isUnrelatedForeignDub = otherForeignLanguages.any { lang ->
+                (text.contains("$lang dub") || text.contains("$lang only") || text.contains("[$lang]")) &&
+                        !origKeywords.any { text.contains(it) }
+            }
+            if (isUnrelatedForeignDub) return@filter false
+
+            val isSubOnly = text.contains("sub only")
+            if (isSubOnly) return@filter false
+
+            val matchesKeyword = origKeywords.any { text.contains(it) } || option.audioBadge?.uppercase()?.contains(origIso3.uppercase()) == true
+            val hasExplicitAudioTracks = src.audioTracks.isNotEmpty()
+            val isCleanDefault = !hasExplicitAudioTracks && (orig == "en" || text.contains("original") || text.contains("raw"))
+
+            matchesKeyword || (hasExplicitAudioTracks && src.audioTracks.any { it.isoCode.equals(orig, true) || it.isoCode.equals(origIso3, true) }) || isCleanDefault
+        }
+    }
+
+    fun selectLanguageCompliantServers(
+        candidates: List<ServerSourceOption>,
+        originalLanguage: String?
+    ): List<ServerSourceOption> {
+        val prefLang = userPreferredAudioLanguage.ifBlank { "hi" }
+        val isHindiPref = prefLang.equals("hi", true) || prefLang.contains("hin", true)
+
+        if (isHindiPref) {
+            // Priority 1-3: Hindi-First (Original Hindi, Hindi Dubbed, Multi-audio containing Hindi)
+            val hindiEligible = filterHindiEligibleServers(candidates)
+            if (hindiEligible.isNotEmpty()) {
+                return hindiEligible
+            }
+
+            // Priority 4: Original Language ONLY when verified Hindi audio is unavailable
+            val origLang = originalLanguage?.lowercase()?.trim()
+            if (!origLang.isNullOrBlank() && origLang != "hi" && origLang != "hin") {
+                val origEligible = filterOriginalLanguageServers(candidates, origLang)
+                if (origEligible.isNotEmpty()) {
+                    return origEligible
+                }
+            }
+
+            // For Hindi original content with no explicit Hindi stream tags, reject unrelated foreign dubs
+            if (origLang == "hi" || origLang == "hin") {
+                return candidates.filterNot { opt ->
+                    val t = "${opt.serverName} ${opt.label}".lowercase()
+                    t.contains("russian") || t.contains("spanish") || t.contains("french") || t.contains("german") || t.contains("italian")
+                }
+            }
+
+            // Fallback for non-Hindi content: filter out unrelated foreign dubs, never accidentally drop valid streams
+            val cleanCandidates = candidates.filterNot { option ->
+                val text = "${option.serverName} ${option.label}".lowercase()
+                text.contains("russian dub") || text.contains("german dub") || text.contains("italian dub") || text.contains("french dub") || text.contains("spanish dub")
+            }
+            return if (cleanCandidates.isNotEmpty()) cleanCandidates else candidates
+        } else {
+            // User configured another preferred audio language (e.g. English, Tamil, etc.)
+            val userEligible = filterOriginalLanguageServers(candidates, prefLang)
+            if (userEligible.isNotEmpty()) {
+                return userEligible
+            }
+            val origLang = originalLanguage?.lowercase()?.trim()
+            if (!origLang.isNullOrBlank()) {
+                val origMatches = filterOriginalLanguageServers(candidates, origLang)
+                if (origMatches.isNotEmpty()) {
+                    return origMatches
+                }
+            }
+            return candidates
         }
     }
 
@@ -4174,37 +4364,46 @@ class PlayerViewModel(
         val isMultiOrDual = combinedLangText.contains("dual") || combinedLangText.contains("multi")
         val hasMetadataHindi = !isExplicitNonHindi && (combinedLangText.contains("hindi") || combinedLangText.contains("hin") || (option.audioBadge?.contains("HIN", true) == true))
 
-        if (isExplicitNonHindi) {
-            score -= 1000.0 // Heavy penalty for non-Hindi only
+        val origLang = currentOriginalLanguage?.lowercase()?.trim()
+        val isNonHindiOriginal = !origLang.isNullOrBlank() && origLang != "hi" && origLang != "hin"
+        val matchesOriginalLanguage = isNonHindiOriginal && (
+            src.audioTracks.any { it.isoCode.equals(origLang, true) || it.languageName.contains(origLang, true) } ||
+            option.audioBadge?.lowercase()?.contains(origLang) == true ||
+            combinedLangText.contains(origLang)
+        )
+
+        if (isExplicitNonHindi && !matchesOriginalLanguage) {
+            score -= 1000.0 // Heavy penalty for unrelated foreign languages
         } else if (hasVerifiedHindi && !isMultiOrDual) {
             score += 600.0 // Priority 1: Verified Hindi audio
         } else if (hasVerifiedHindi && isMultiOrDual) {
-            score += 550.0 // Priority 4: Verified Multi-language containing Hindi
+            score += 550.0 // Priority 3: Verified Multi-language containing Hindi
         } else if (hasMetadataHindi && isMultiOrDual) {
             score += 300.0 // Metadata Multi with Hindi
         } else if (hasMetadataHindi) {
             score += 250.0 // Metadata Hindi
+        } else if (matchesOriginalLanguage) {
+            score += 200.0 // Priority 4: Verified original language when Hindi is unavailable
         } else {
-            score -= 200.0 // UNKNOWN: never prioritized over verified Hindi
+            score -= 200.0 // UNKNOWN: never prioritized over verified Hindi or original
         }
 
-        // 5. Resolution & Codec Compatibility Tier
+        // 5. Resolution & Codec Compatibility Tier (Disable automatic 4K selection unless preferred)
         val height = parseResolutionHeight(option.resolutionLabel.ifBlank { src.quality })
-        
-        // Disable automatic selection of 4K / 2160p / HDR / Dolby Vision
         if (preferredQualityHeight < 2160) {
-            if (height >= 2160 || combinedLangText.contains("4k") || combinedLangText.contains("2160p") || combinedLangText.contains("hdr") || combinedLangText.contains("dovi")) {
-                score -= 500.0
+            if (height >= 2160 || combinedLangText.contains("4k") || combinedLangText.contains("2160p") || combinedLangText.contains("uhd") || combinedLangText.contains("hdr") || combinedLangText.contains("dovi")) {
+                score -= 1000.0 // Strictly prioritize 1080p/720p over 4K/HDR for default mobile playback
             }
-            // Automatic resolution priority: 1080p > 720p > 480p
+            // Automatic resolution priority: 1080p > 720p > 480p > 360p
             when (height) {
                 1080 -> score += 200.0
                 720 -> score += 130.0
                 480 -> score += 80.0
-                else -> score += 40.0
+                360 -> score += 50.0
+                else -> score += 30.0
             }
         } else {
-            // Manual quality selection preserves 4K when user explicitly configures 4K
+            // Quality selection preserves 4K when user explicitly configures 4K (preferredQualityHeight >= 2160)
             when {
                 height >= 2160 -> score += 350.0
                 height == 1080 -> score += 200.0
@@ -4244,19 +4443,34 @@ class PlayerViewModel(
             if (seeders < 5) return false
         }
         val h = parseResolutionHeight(option.resolutionLabel.ifBlank { src.quality })
+        if (h >= 2160 || h > 1080) return false // Strictly exclude 4K streams from prime candidates (1080p max for fast auto-play)
         val matchesPreferred = when {
             h <= 0 -> false
-            prefHeight >= 2160 -> h >= 2160
-            else -> h == prefHeight
+            prefHeight >= 2160 -> h == 1080 // Auto-clamp 4K preference to stable 1080p for instant playback
+            else -> h == prefHeight || (prefHeight == 1080 && h == 720)
         }
         if (!matchesPreferred) return false
-        val combinedText = "${option.serverName} ${option.label}".lowercase()
+        val combinedText = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
+        if (combinedText.contains("4k") || combinedText.contains("2160p") || combinedText.contains("uhd")) return false
         if (combinedText.contains("remux")) {
             val sizeGb = parseSizeToGb(option.label) ?: parseSizeToGb(option.serverName) ?: 0.0
-            if (sizeGb > 20.0 || sizeGb == 0.0) return false
+            if (sizeGb > 10.0 || sizeGb == 0.0) return false
         }
         val probed = probedLatencies[src.url]
         if (probed != null && probed.second == ServerHealthCategory.UNWATCHABLE) return false
+
+        // Language compliance: ensure prime candidate satisfies user's preferred audio language
+        val prefLang = userPreferredAudioLanguage.ifBlank { "hi" }
+        if (prefLang.equals("hi", true) || prefLang.contains("hin", true)) {
+            val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
+            val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
+            if (hasVerifiedNonHindiOnly) return false
+            val origLang = currentOriginalLanguage?.lowercase()?.trim()
+            if (!origLang.isNullOrBlank() && origLang != "hi" && origLang != "hin") {
+                val hasHindiKeyword = Regex("""\b(?:hin|hindi)\b""", RegexOption.IGNORE_CASE).containsMatchIn(combinedText) || (option.audioBadge?.contains("HIN", true) == true)
+                if (!hasVerifiedHindi && !hasHindiKeyword) return false
+            }
+        }
         return true
     }
 
@@ -4296,6 +4510,8 @@ class PlayerViewModel(
                     com.euthopiar.core.model.StreamContainer.DASH
                 )
 
+        val filteredTracks = exoTracks.filter { it.height <= 1080 }
+
         if (isAdaptiveStream) {
             // Adaptive multi-rendition stream (HLS / DASH)
             resultQualities.add(
@@ -4312,10 +4528,10 @@ class PlayerViewModel(
                 )
             )
             val heightCounts = mutableMapOf<Int, Int>()
-            for (cand in exoTracks) {
+            for (cand in filteredTracks) {
                 heightCounts[cand.height] = (heightCounts[cand.height] ?: 0) + 1
             }
-            for (cand in exoTracks) {
+            for (cand in filteredTracks) {
                 val baseLabel = if (cand.height > 0) labelForHeight(cand.height) else "Adaptive"
                 val label = if (cand.bitrate != null && cand.bitrate > 0) {
                     val mbpsStr = if (cand.bitrate >= 1_000_000) {
@@ -4349,11 +4565,12 @@ class PlayerViewModel(
                 )
             }
         } else {
-            // Single-resolution direct / debrid / P2P stream
-            val single = exoTracks.firstOrNull()
-            val activeHeight = single?.height?.takeIf { it > 0 } ?: parseResolutionHeight(
+            // Single-resolution direct / debrid / P2P stream (clamped to 1080p max)
+            val single = filteredTracks.firstOrNull()
+            val rawActiveHeight = single?.height?.takeIf { it > 0 } ?: parseResolutionHeight(
                 activeServer?.resolutionLabel.orEmpty().ifBlank { activeServer?.streamSource?.quality.orEmpty() }
             )
+            val activeHeight = if (rawActiveHeight > 1080) 1080 else rawActiveHeight
 
             resultQualities.add(
                 VideoQualityOption(
@@ -4402,7 +4619,7 @@ class PlayerViewModel(
             val otherTiers = healthyServers.groupBy {
                 parseResolutionHeight(it.resolutionLabel.ifBlank { it.streamSource.quality })
             }.filter { (tierHeight, _) ->
-                tierHeight > 0 && tierHeight != activeHeight
+                tierHeight in 1..1080 && tierHeight != activeHeight
             }
 
             for ((tierHeight, tierServers) in otherTiers) {
@@ -4474,6 +4691,7 @@ class PlayerViewModel(
         android.util.Log.d("MovieHubStreaming", "Selected server: ${serverOption.serverName}, resolution=${serverOption.resolutionLabel}, isTorrent=${serverOption.isTorrent}, explicit=$isUserExplicit")
         if (isUserExplicit) {
             hasStartedPlayback = true
+            com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().manualSourceSwitch(serverOption.id, serverOption.streamSource.url)
         }
         failedServerIds.remove(serverOption.id)
         failedAudioTrackIds.clear()
@@ -4734,10 +4952,10 @@ class PlayerViewModel(
         showToast("Audio: $display")
     }
 
-    fun selectAudioTrack(option: AudioTrackOption) {
+    fun selectAudioTrack(option: AudioTrackOption, isUserExplicit: Boolean = false) {
         val prefLang = option.language?.takeIf { it.isNotBlank() && it != "und" }
             ?: option.isoCode.takeIf { it.isNotBlank() && it != "und" && it != "auto" }
-        if (prefLang != null) {
+        if (isUserExplicit && prefLang != null) {
             userPreferredAudioLanguage = prefLang
             viewModelScope.launch { preferencesRepository.setPreferredAudioLanguage(prefLang) }
         }
@@ -4998,8 +5216,10 @@ class PlayerViewModel(
         seekDebounceJob?.cancel()
         pendingSeekTargetMs = null
         pendingDeferredSeekMs = null
+        bufferingStallStartTime = null
         val effectiveDuration = player.duration.takeIf { it > 0 } ?: _uiState.value.durationMs
         val clamped = if (effectiveDuration > 0) positionMs.coerceIn(0L, effectiveDuration) else positionMs.coerceAtLeast(0L)
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekStarted(clamped)
         android.util.Log.d("PlayerViewModel", "seekTo: target=$positionMs, clamped=$clamped, duration=$effectiveDuration, isSeekable=${player.isCurrentMediaItemSeekable}")
         player.seekTo(clamped)
         _uiState.update { it.copy(currentPositionMs = clamped, isScrubbing = false) }
@@ -5015,6 +5235,8 @@ class PlayerViewModel(
         val effectiveDuration = player.duration.takeIf { it > 0 } ?: _uiState.value.durationMs
         val target = current + deltaMs
         val newPos = if (effectiveDuration > 0) target.coerceIn(0L, effectiveDuration) else target.coerceAtLeast(0L)
+        bufferingStallStartTime = null
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekStarted(newPos)
         android.util.Log.d("PlayerViewModel", "seekRelative: delta=$deltaMs, current=$current, target=$newPos, duration=$effectiveDuration, isSeekable=${player.isCurrentMediaItemSeekable}")
         pendingSeekTargetMs = newPos
         _uiState.update { it.copy(currentPositionMs = newPos) }
@@ -5038,6 +5260,8 @@ class PlayerViewModel(
     }
 
     fun onScrubStart(positionMs: Long) {
+        bufferingStallStartTime = null
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekStarted(positionMs)
         _uiState.update { it.copy(isScrubbing = true, scrubPositionMs = positionMs) }
         autoHideJob?.cancel()
     }
@@ -5405,6 +5629,7 @@ class PlayerViewModel(
             while (isActive) {
                 exoPlayer?.let { player ->
                     val pos = player.currentPosition.coerceAtLeast(0L)
+                    com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().updatePosition(pos)
                     val isBuffering = _uiState.value.isBuffering || player.playbackState == Player.STATE_BUFFERING
                     val nowMs = System.currentTimeMillis()
 
@@ -5425,8 +5650,8 @@ class PlayerViewModel(
                             isSequentialCloud -> 35_000L
                             isStartup && is4k -> 40_000L
                             isStartup -> 30_000L
-                            is4k -> 20_000L
-                            else -> 15_000L
+                            is4k -> 25_000L
+                            else -> 30_000L
                         }
 
                         val startTime = bufferingStallStartTime
@@ -5443,11 +5668,11 @@ class PlayerViewModel(
                             lastPeerCount = _uiState.value.p2pPeers
                             currentGracePeriodMs = when {
                                 isLive && isStartup -> 10_000L
-                                isP2p -> 14_000L
+                                isP2p -> 18_000L
                                 isStartup && is4k -> 25_000L
                                 isStartup -> 15_000L
-                                isSequentialCloud -> 15_000L
-                                else -> 5000L
+                                isSequentialCloud -> 18_000L
+                                else -> 15_000L // 15s mid-stream grace period allows segment downloads and transient recovery
                             }
                         } else {
                             val elapsedMs = nowMs - startTime
@@ -5504,8 +5729,8 @@ class PlayerViewModel(
                                     lastP2pBufferProgress = p2pBuf
                                     lastPeerCount = p2pPeers
                                 } else {
-                                    // At startup or sequential streaming, any sign of progress (bytes arriving or buffer growing) counts as healthy.
-                                    val progressing = if (isStartup || isSequentialCloud) (bytesDelta > 0L || bufferGrowing) else (speedBps > 150 * 1024L && bufferGrowing)
+                                    // Any sign of progress (bytes arriving or buffer growing) counts as healthy to avoid aggressive failovers during segment fetches
+                                    val progressing = bytesDelta > 0L || bufferGrowing
                                     if (progressing) {
                                         currentGracePeriodMs = (currentGracePeriodMs + 3000L).coerceAtMost(maxGraceMs)
                                         android.util.Log.d("PlayerViewModel", "Velocity ramp-up: ${speedBps / 1024} KB/s (seqDelta=$seqBytesDelta), buffer growing=$bufferGrowing. Extended grace to ${currentGracePeriodMs}ms (max ${maxGraceMs}ms)")
@@ -5514,16 +5739,20 @@ class PlayerViewModel(
                             }
 
                             if (elapsedMs > currentGracePeriodMs) {
-                                val seqSession = com.euthopiar.ui.player.sequential.SequentialStreamManager.getActiveSession()
-                                val isSeqActivelyGrowing = seqSession != null && !seqSession.isClosed &&
-                                        ((nowMs - lastActiveDownloadTimeMs <= 3000L) || seqSession.highWaterMark > lastSeqHighWaterMark)
-                                if (isSeqActivelyGrowing) {
-                                    bufferingStallStartTime = nowMs
-                                    currentGracePeriodMs = 15_000L
-                                    android.util.Log.d("PlayerViewModel", "Sequential stream actively downloading (hwm=${seqSession.highWaterMark}). Postponing stall watchdog.")
-                                } else {
+                                if (com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
                                     bufferingStallStartTime = null
-                                    triggerFailover("Buffering stalled")
+                                } else {
+                                    val seqSession = com.euthopiar.ui.player.sequential.SequentialStreamManager.getActiveSession()
+                                    val isSeqActivelyGrowing = seqSession != null && !seqSession.isClosed &&
+                                            ((nowMs - lastActiveDownloadTimeMs <= 3000L) || seqSession.highWaterMark > lastSeqHighWaterMark)
+                                    if (isSeqActivelyGrowing) {
+                                        bufferingStallStartTime = nowMs
+                                        currentGracePeriodMs = 15_000L
+                                        android.util.Log.d("PlayerViewModel", "Sequential stream actively downloading (hwm=${seqSession.highWaterMark}). Postponing stall watchdog.")
+                                    } else {
+                                        bufferingStallStartTime = null
+                                        triggerFailover("Buffering stalled")
+                                    }
                                 }
                             }
                         }
@@ -5672,6 +5901,11 @@ class PlayerViewModel(
     }
 
     private fun triggerFailover(reason: String = "Buffering stalled") {
+        if (com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
+            android.util.Log.d("PlayerViewModel", "triggerFailover blocked: source switching is forbidden for active playback session (reason=$reason)")
+            bufferingStallStartTime = null
+            return
+        }
         val currentServer = _uiState.value.selectedServer
         if (currentServer != null) {
             failedServerIds.add(currentServer.id)
@@ -5714,6 +5948,17 @@ class PlayerViewModel(
                 }
             } else {
                 android.util.Log.w("PlayerViewModel", "Stream source unreachable for ${currentServer?.serverName} ($reason)")
+                currentMediaId?.let { mId ->
+                    viewModelScope.launch {
+                        com.euthopiar.core.sync.supabase.SupabaseSourceManagementClient.getInstance().recordSourceFailure(
+                            providerId = currentServer?.serverName.orEmpty(),
+                            mediaId = mId,
+                            errorCode = "SOURCE_UNREACHABLE",
+                            errorMessage = reason,
+                            sourceId = currentServer?.id
+                        )
+                    }
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -6271,6 +6516,7 @@ class PlayerViewModel(
     }
 
     fun onExitPlayer() {
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().endSession()
         currentPlaybackSessionToken.incrementAndGet()
         val saveJob = savePlaybackProgress()
         playbackSyncCoordinator.onPlaybackEndedOrExited(saveJob)
