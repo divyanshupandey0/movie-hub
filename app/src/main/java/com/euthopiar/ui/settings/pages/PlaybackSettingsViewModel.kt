@@ -15,7 +15,7 @@ class PlaybackSettingsViewModel(application: Application) : AndroidViewModel(app
 
     val maxSupportedBufferSizeMb: Int = PreferencesRepository.getMaxSupportedBufferSizeMb(application)
 
-    private val _defaultQuality = MutableStateFlow("Auto")
+    private val _defaultQuality = MutableStateFlow("1080p")
     val defaultQuality: StateFlow<String> = _defaultQuality.asStateFlow()
 
     private val _autoPlayNext = MutableStateFlow(true)

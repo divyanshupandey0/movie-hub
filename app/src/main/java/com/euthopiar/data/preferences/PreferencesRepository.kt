@@ -204,7 +204,7 @@ class PreferencesRepository private constructor(private val context: Context) {
             if (exception is IOException) emit(emptyPreferences()) else throw exception
         }
         .map { preferences ->
-            preferences[PreferencesKeys.DEFAULT_QUALITY] ?: "Auto"
+            preferences[PreferencesKeys.DEFAULT_QUALITY] ?: "1080p"
         }
 
     val autoPlayNextEpisode: Flow<Boolean> = context.preferencesDataStore.data
@@ -1628,7 +1628,7 @@ class PreferencesRepository private constructor(private val context: Context) {
                     preferences[PreferencesKeys.SECONDARY_AUDIO_LANGUAGE] = "en"
                 }
                 if (!preferences.contains(PreferencesKeys.DEFAULT_QUALITY)) {
-                    preferences[PreferencesKeys.DEFAULT_QUALITY] = "Auto"
+                    preferences[PreferencesKeys.DEFAULT_QUALITY] = "1080p"
                 }
                 if (!preferences.contains(PreferencesKeys.AUTO_SOURCE_SELECTION)) {
                     preferences[PreferencesKeys.AUTO_SOURCE_SELECTION] = true

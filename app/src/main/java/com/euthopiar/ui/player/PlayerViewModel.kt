@@ -287,7 +287,7 @@ class PlayerViewModel(
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     private var exoPlayer: ExoPlayer? = null
-    private var userDefaultQuality: String = "Auto"
+    private var userDefaultQuality: String = "1080p"
     private var streamJob: Job? = null
     private var tickerJob: Job? = null
     private var autoHideJob: Job? = null
@@ -951,9 +951,11 @@ class PlayerViewModel(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {
+                        com.euthopiar.core.backend.session.BackendPlaybackSessionManager.getInstance().setBufferingOrSeeking(isBufferingOrSeeking = true)
                         _uiState.update { it.copy(isBuffering = true) }
                     }
                     Player.STATE_READY -> {
+                        com.euthopiar.core.backend.session.BackendPlaybackSessionManager.getInstance().setBufferingOrSeeking(isBufferingOrSeeking = false)
                         bufferingStallStartTime = null
                         com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekCompleted(player.currentPosition)
                         val deferredSeek = pendingDeferredSeekMs
@@ -967,10 +969,10 @@ class PlayerViewModel(
                         starvationConsecutiveSeconds = 0
                         val duration = player.duration.takeIf { it > 0 } ?: _uiState.value.durationMs
 
-                        // Honeypot & Promo Resilience: detect short warning/honeypot/trailer clips for full Movies/TV/Anime (only if auto-selected)
-                        val isTrailerOrClip = (_uiState.value.mediaType == MediaType.MOVIE && duration in 1000L..240000L) ||
-                                (_uiState.value.mediaType in listOf(MediaType.TV_SERIES, MediaType.ANIME) && duration in 1000L..120000L)
-                        if (_uiState.value.smartFailoverEnabled && !userExplicitServerSelection && isTrailerOrClip) {
+                        // Honeypot & Promo Resilience: detect short warning/honeypot/trailer clips for full Movies/TV/Anime (e.g. NetMirror 10-min abuse notice)
+                        val isTrailerOrClip = (_uiState.value.mediaType == MediaType.MOVIE && duration in 1000L..900000L) ||
+                                (_uiState.value.mediaType in listOf(MediaType.TV_SERIES, MediaType.ANIME) && duration in 1000L..300000L)
+                        if (isTrailerOrClip) {
                             val badServer = _uiState.value.selectedServer
                             if (badServer != null && badServer.id !in failedServerIds) {
                                 failedServerIds.add(badServer.id)
@@ -979,6 +981,17 @@ class PlayerViewModel(
                                     val nextServer = remaining.first()
                                     showToast("Notice/trailer clip detected (${duration / 1000}s). Switching to ${nextServer.serverName}...")
                                     selectServer(nextServer)
+                                    return
+                                } else {
+                                    player.pause()
+                                    _uiState.update {
+                                        it.copy(
+                                            isLoading = false,
+                                            isPlaying = false,
+                                            isBuffering = false,
+                                            errorMessage = "This title is not yet available in full length (only a short ${duration / 60000}m notice/trailer was returned by providers)."
+                                        )
+                                    }
                                     return
                                 }
                             }
@@ -1020,6 +1033,7 @@ class PlayerViewModel(
             override fun onRenderedFirstFrame() {
                 android.util.Log.d("PlayerViewModel", "onRenderedFirstFrame: First video frame rendered successfully")
                 videoFrameRendered = true
+                com.euthopiar.core.backend.session.BackendPlaybackSessionManager.getInstance().onFirstFrameRendered()
                 transientIoRetryCount = 0
                 _uiState.update { it.copy(userError = null, errorMessage = null) }
                 updateMediaFormatInfo()
@@ -1049,6 +1063,10 @@ class PlayerViewModel(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                com.euthopiar.core.backend.session.BackendPlaybackSessionManager.getInstance().onPlaybackError(
+                    errorCode = error.errorCodeName,
+                    errorMessage = error.message
+                )
                 android.util.Log.e("MovieHubStreaming", "ExoPlayer onPlayerError on ${_uiState.value.selectedServer?.serverName}: ${error.errorCodeName} (${error.errorCode}) - ${error.message}", error)
                 android.util.Log.e("PlayerViewModel", "ExoPlayer onPlayerError: ${error.errorCodeName} (${error.errorCode}) - ${error.message}", error)
 
@@ -1570,19 +1588,7 @@ class PlayerViewModel(
         if (instant) {
             android.util.Log.d("PlayerViewModel", "Instant failover triggered (0ms) for error: ${error.errorCodeName} - ${error.message}")
         }
-        if (com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
-            android.util.Log.w("PlayerViewModel", "fallbackToNextServer blocked: active source is locked or seeking in progress")
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    isBuffering = false,
-                    userError = com.euthopiar.ui.util.UserError.SourceUnavailable,
-                    errorMessage = null,
-                    activeSidePanel = PlayerSidePanelType.SOURCES
-                )
-            }
-            return
-        }
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().unlockForFailover()
         if (!_uiState.value.smartFailoverEnabled) {
             android.util.Log.w("PlayerViewModel", "Smart failover disabled; playback error on ${currentServer?.serverName}: ${error.localizedMessage}", error)
             _uiState.update {
@@ -1627,6 +1633,7 @@ class PlayerViewModel(
         } else {
             if (streamJob?.isActive == true) {
                 android.util.Log.d("PlayerViewModel", "No fallback available yet, but streamJob is active. Waiting for more sources...")
+                hasStartedPlayback = false
                 _uiState.update {
                     it.copy(
                         isLoading = true,
@@ -2147,36 +2154,40 @@ class PlayerViewModel(
                                     probeServerLatency(option)
                                 }
 
-                                // FAST PLAYBACK: Readiness Window (450ms) & Auto-Start
+                                // FAST PLAYBACK: Readiness Window & Auto-Start
                                 val curSelected = _uiState.value.selectedServer
-                                val needsStart = !userExplicitServerSelection && (!hasStartedPlayback || _uiState.value.errorMessage != null || _uiState.value.userError != null || (curSelected != null && curSelected.id in failedServerIds))
-                                if (needsStart) {
-                                    val prefQualityStr = preferencesRepository.defaultQuality.firstOrNull() ?: "Auto"
-                                    val prefHeight = when {
-                                        prefQualityStr.contains("4K", ignoreCase = true) || prefQualityStr.contains("2160", ignoreCase = true) -> 2160
-                                        prefQualityStr.contains("1440", ignoreCase = true) || prefQualityStr.contains("2K", ignoreCase = true) -> 1440
-                                        prefQualityStr.contains("1080", ignoreCase = true) -> 1080
-                                        prefQualityStr.contains("720", ignoreCase = true) -> 720
-                                        prefQualityStr.contains("480", ignoreCase = true) -> 480
-                                        else -> 1080 // Auto = Capped at 1080p maximum for automatic Hindi-first selection
-                                    }
+                                val isCurFailed = curSelected != null && curSelected.id in failedServerIds
+                                val prefQualityStr = preferencesRepository.defaultQuality.firstOrNull() ?: "1080p"
+                                val prefHeight = when {
+                                    prefQualityStr.contains("4K", ignoreCase = true) || prefQualityStr.contains("2160", ignoreCase = true) -> 2160
+                                    prefQualityStr.contains("1440", ignoreCase = true) || prefQualityStr.contains("2K", ignoreCase = true) -> 1440
+                                    prefQualityStr.contains("1080", ignoreCase = true) -> 1080
+                                    prefQualityStr.contains("720", ignoreCase = true) -> 720
+                                    prefQualityStr.contains("480", ignoreCase = true) -> 480
+                                    else -> 1080 // Auto = Capped at 1080p maximum for automatic Hindi-first selection
+                                }
+                                val needsStart = !userExplicitServerSelection && (!hasStartedPlayback || _uiState.value.errorMessage != null || _uiState.value.userError != null || isCurFailed)
+                                val curScore = curSelected?.let { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) } ?: -9999.0
+                                val newScore = scoreServerForInitialAutoPlay(option, hasDebrid, prefHeight)
+                                val canUpgradeToPreferred = !userExplicitServerSelection && !videoFrameRendered && (newScore > curScore + 50.0) && isPreferredAutoPlayCandidate(option, hasDebrid, prefHeight)
 
-                                    if (isPrimeCandidate(option, hasDebrid, prefHeight)) {
-                                        // Immediate 0ms start for prime candidate
-                                        fastStartJob?.cancel()
-                                        fastStartJob = null
-                                        hasStartedPlayback = true
-                                        playbackStartTimestampMs = System.currentTimeMillis()
-                                        withContext(Dispatchers.Main) {
-                                            if (sessionToken != currentPlaybackSessionToken.get()) return@withContext
-                                            _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = option) }
-                                            playStreamSource(option.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
-                                        }
-                                    } else if (!hasStartedPlayback) {
-                                        // 200ms readiness window for instant auto-play
+                                if (canUpgradeToPreferred || (needsStart && isPrimeCandidate(option, hasDebrid, prefHeight))) {
+                                    // Immediate 0ms start for prime / preferred candidate
+                                    fastStartJob?.cancel()
+                                    fastStartJob = null
+                                    hasStartedPlayback = true
+                                    playbackStartTimestampMs = System.currentTimeMillis()
+                                    withContext(Dispatchers.Main) {
+                                        if (sessionToken != currentPlaybackSessionToken.get()) return@withContext
+                                        _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = option) }
+                                        playStreamSource(option.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
+                                    }
+                                } else if (needsStart) {
+                                    if (!hasStartedPlayback) {
+                                        // Discovery window (2500ms) for high-quality provider discovery
                                         if (fastStartJob == null || !fastStartJob!!.isActive) {
                                             fastStartJob = viewModelScope.launch {
-                                                delay(200L)
+                                                delay(2500L)
                                                 if (isActive && !hasStartedPlayback && sessionToken == currentPlaybackSessionToken.get()) {
                                                     playbackStartTimestampMs = System.currentTimeMillis()
                                                     withContext(Dispatchers.Main) {
@@ -2193,15 +2204,6 @@ class PlayerViewModel(
                                                             hasStartedPlayback = true
                                                             _uiState.update { it.copy(isLoading = false, userError = null, errorMessage = null, selectedServer = bestServer) }
                                                             playStreamSource(bestServer.streamSource, collectedSubtitles, seekToPosition = resumePosition, sessionToken = sessionToken)
-                                                        } else if (candidates.isNotEmpty()) {
-                                                            _uiState.update {
-                                                                it.copy(
-                                                                    isLoading = false,
-                                                                    isBuffering = false,
-                                                                    userError = com.euthopiar.ui.util.UserError.NoHindiSource,
-                                                                    errorMessage = "No verified Hindi audio source is currently available for this content."
-                                                                )
-                                                            }
                                                         }
                                                     }
                                                 }
@@ -2413,9 +2415,9 @@ class PlayerViewModel(
                     fastStartJob?.join()
                 }
 
-                if (!hasStartedPlayback && _uiState.value.availableServers.isNotEmpty()) {
+                if ((!hasStartedPlayback || _uiState.value.selectedServer?.id in failedServerIds || _uiState.value.errorMessage != null || _uiState.value.userError != null) && _uiState.value.availableServers.isNotEmpty()) {
                     val hasDebrid = isUserDebridActive()
-                    val prefQualityStr = preferencesRepository.defaultQuality.firstOrNull() ?: "Auto"
+                    val prefQualityStr = preferencesRepository.defaultQuality.firstOrNull() ?: "1080p"
                     val prefHeight = when {
                         prefQualityStr.contains("4K", ignoreCase = true) || prefQualityStr.contains("2160", ignoreCase = true) -> 2160
                         prefQualityStr.contains("1440", ignoreCase = true) || prefQualityStr.contains("2K", ignoreCase = true) -> 1440
@@ -3423,6 +3425,49 @@ class PlayerViewModel(
         player.playWhenReady = true
         val sId = activeServer?.id ?: source.serverName.ifBlank { "current" }
         com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().lockActiveSource(sId, source.url)
+        try {
+            val contentDesc = com.euthopiar.core.backend.model.BackendContentDescriptor(
+                id = currentMediaId.orEmpty(),
+                type = when (_uiState.value.mediaType) {
+                    MediaType.MOVIE -> "movie"
+                    MediaType.LIVE_TV -> "live"
+                    else -> "tv"
+                },
+                title = _uiState.value.mediaTitle,
+                season = _uiState.value.seasonNumber,
+                episode = _uiState.value.episodeNumber,
+                imdbId = currentImdbId
+            )
+            val backendSource = com.euthopiar.core.backend.model.BackendSourceItem(
+                id = sId,
+                provider = activeServer?.serverName ?: "Unknown",
+                status = "verified",
+                contentMatch = true,
+                url = source.url,
+                format = source.container.name.lowercase(),
+                quality = source.quality,
+                headers = source.headers,
+                state = com.euthopiar.core.backend.model.PlayableSourceState.VERIFIED
+            )
+            com.euthopiar.core.backend.session.BackendPlaybackSessionManager.getInstance().startSession(
+                content = contentDesc,
+                initialSource = backendSource,
+                availableCandidates = _uiState.value.availableServers.map { sOption ->
+                    com.euthopiar.core.backend.model.BackendSourceItem(
+                        id = sOption.id,
+                        provider = sOption.serverName,
+                        status = "verified",
+                        contentMatch = true,
+                        url = sOption.streamSource.url,
+                        format = sOption.streamSource.container.name.lowercase(),
+                        quality = sOption.streamSource.quality,
+                        headers = sOption.streamSource.headers,
+                        state = com.euthopiar.core.backend.model.PlayableSourceState.VERIFIED
+                    )
+                },
+                resumePositionMs = seekToPosition ?: 0L
+            )
+        } catch (_: Exception) {}
     }
 
     private fun extractExoPlayerTracks(tracks: Tracks) {
@@ -3573,6 +3618,7 @@ class PlayerViewModel(
         if (detectedAudio.size > 1) {
             val prefLang = userPreferredAudioLanguage.ifBlank { "hi" }
             val secLang = userSecondaryAudioLanguage.ifBlank { "en" }
+            val isHindiPref = prefLang.equals("hi", ignoreCase = true) || prefLang.contains("hin", ignoreCase = true)
 
             // 1. Detect if any Hindi track is available
             val hindiTrack = detectedAudio.firstOrNull { opt ->
@@ -3584,6 +3630,27 @@ class PlayerViewModel(
                     opt.displayName.contains("Hindi", ignoreCase = true) ||
                     opt.label.contains("Hindi", ignoreCase = true)
                 )
+            }
+
+            // Runtime Hindi Verification (Section B, C & G):
+            // If user requires Hindi, but the stream contains NO Hindi audio track:
+            if (isHindiPref && hindiTrack == null && !userExplicitServerSelection) {
+                val nonAutoTracks = detectedAudio.filter { !it.isAuto }
+                if (nonAutoTracks.isNotEmpty()) {
+                    val curServer = _uiState.value.selectedServer
+                    val otherHindiServers = filterHindiEligibleServers(_uiState.value.availableServers).filter {
+                        it.id !in failedServerIds && (curServer == null || it.id != curServer.id)
+                    }
+                    if (otherHindiServers.isNotEmpty()) {
+                        android.util.Log.w("PlayerViewModel", "Runtime audio track verification failed: Stream ${curServer?.serverName} lacks Hindi audio (tracks: ${nonAutoTracks.map { it.displayName }}). Failing over to verified Hindi alternative.")
+                        if (curServer != null) {
+                            failedServerIds.add(curServer.id)
+                        }
+                        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().unlockForFailover()
+                        triggerFailover("Audio mismatch: stream lacks Hindi audio")
+                        return
+                    }
+                }
             }
 
             // 2. If user explicitly configured a non-Hindi preference, check that first
@@ -4303,10 +4370,9 @@ class PlayerViewModel(
                     seeders >= 50 -> score += 350.0
                     seeders >= 25 -> score += 250.0
                     seeders >= 10 -> score += 180.0
-                    seeders >= 5 -> score += 120.0
-                    seeders >= 3 -> score += 50.0
-                    seeders > 0 -> score -= 250.0
-                    else -> score -= 800.0
+                    seeders >= 5 -> score += 50.0
+                    seeders in 1..4 -> score -= 2500.0 // Low-seed torrent cannot stream smoothly without Debrid
+                    else -> score -= 4000.0 // 0 seeders / dead torrent
                 }
             }
         }
@@ -4329,7 +4395,7 @@ class PlayerViewModel(
                 src.addonName?.contains(prefProvider, ignoreCase = true) == true ||
                 src.addonId?.contains(prefProvider, ignoreCase = true) == true
         if (isPreferredProvider) {
-            score += 200.0
+            score += 350.0
         } else {
             val isMediaFusion = option.addonNames.any { it.contains("MediaFusion", ignoreCase = true) } ||
                     option.serverName.contains("MediaFusion", ignoreCase = true) ||
@@ -4360,9 +4426,26 @@ class PlayerViewModel(
                 (combinedLangText.contains("malayalam") && !combinedLangText.contains("hindi") && !combinedLangText.contains("multi") && !combinedLangText.contains("dual")) ||
                 (combinedLangText.contains("kannada") && !combinedLangText.contains("hindi") && !combinedLangText.contains("multi") && !combinedLangText.contains("dual"))
 
+        val hasRegionalOther = combinedLangText.contains("tel") ||
+                combinedLangText.contains("tam") ||
+                combinedLangText.contains("kan") ||
+                combinedLangText.contains("mal") ||
+                combinedLangText.contains("telugu") ||
+                combinedLangText.contains("tamil") ||
+                combinedLangText.contains("kannada") ||
+                combinedLangText.contains("malayalam") ||
+                src.audioTracks.any { 
+                    val c = it.isoCode.lowercase()
+                    c == "te" || c == "tel" || c == "ta" || c == "tam" || c == "kn" || c == "kan" || c == "ml" || c == "mal"
+                }
+
+        val hasEnglish = combinedLangText.contains("eng") || combinedLangText.contains("english") ||
+                src.audioTracks.any { it.isoCode.equals("en", true) || it.isoCode.equals("eng", true) }
+
         val isExplicitNonHindi = hasVerifiedNonHindiOnly || isExplicitRegionalOnly
-        val isMultiOrDual = combinedLangText.contains("dual") || combinedLangText.contains("multi")
         val hasMetadataHindi = !isExplicitNonHindi && (combinedLangText.contains("hindi") || combinedLangText.contains("hin") || (option.audioBadge?.contains("HIN", true) == true))
+        val isMultiOrDual = combinedLangText.contains("dual") || combinedLangText.contains("multi") || src.audioTracks.size > 1 || (hasVerifiedHindi && (hasRegionalOther || hasEnglish))
+        val isPureHindi = (hasVerifiedHindi || hasMetadataHindi) && !isMultiOrDual && !hasRegionalOther && !hasEnglish
 
         val origLang = currentOriginalLanguage?.lowercase()?.trim()
         val isNonHindiOriginal = !origLang.isNullOrBlank() && origLang != "hi" && origLang != "hin"
@@ -4374,16 +4457,20 @@ class PlayerViewModel(
 
         if (isExplicitNonHindi && !matchesOriginalLanguage) {
             score -= 1000.0 // Heavy penalty for unrelated foreign languages
-        } else if (hasVerifiedHindi && !isMultiOrDual) {
-            score += 600.0 // Priority 1: Verified Hindi audio
+        } else if (hasVerifiedHindi && isPureHindi) {
+            score += 750.0 // Priority 1: Verified Pure Hindi audio
+        } else if (hasVerifiedHindi && hasEnglish && !hasRegionalOther) {
+            score += 650.0 // Priority 2: Verified Hindi + English multi-audio
         } else if (hasVerifiedHindi && isMultiOrDual) {
-            score += 550.0 // Priority 3: Verified Multi-language containing Hindi
+            score += 520.0 // Priority 3: Verified Hindi + other languages multi-audio
+        } else if (hasMetadataHindi && isPureHindi) {
+            score += 480.0 // Priority 1/4: Metadata Pure Hindi
+        } else if (hasMetadataHindi && hasEnglish && !hasRegionalOther) {
+            score += 420.0 // Priority 2: Metadata Hindi + English
         } else if (hasMetadataHindi && isMultiOrDual) {
-            score += 300.0 // Metadata Multi with Hindi
-        } else if (hasMetadataHindi) {
-            score += 250.0 // Metadata Hindi
+            score += 350.0 // Priority 3: Metadata Hindi + other languages
         } else if (matchesOriginalLanguage) {
-            score += 200.0 // Priority 4: Verified original language when Hindi is unavailable
+            score += 200.0 // Priority 5: Verified original language when Hindi is unavailable
         } else {
             score -= 200.0 // UNKNOWN: never prioritized over verified Hindi or original
         }
@@ -4396,7 +4483,7 @@ class PlayerViewModel(
             }
             // Automatic resolution priority: 1080p > 720p > 480p > 360p
             when (height) {
-                1080 -> score += 200.0
+                1080 -> score += 300.0
                 720 -> score += 130.0
                 480 -> score += 80.0
                 360 -> score += 50.0
@@ -4433,14 +4520,67 @@ class PlayerViewModel(
         return score
     }
 
-    fun isPrimeCandidate(option: ServerSourceOption, hasDebrid: Boolean, prefHeight: Int = 1080): Boolean {
+    fun isPreferredAutoPlayCandidate(
+        option: ServerSourceOption,
+        hasDebrid: Boolean,
+        prefHeight: Int = 1080
+    ): Boolean {
         val src = option.streamSource
-        if (src.matchScore < 0.75) return false
+        if (option.healthCategory == ServerHealthCategory.UNWATCHABLE || option.id in failedServerIds) {
+            return false
+        }
+        val prefProvider = userPreferredProvider.ifBlank { "Torrentio" }
+        val isPreferredProvider = option.addonNames.any { it.contains(prefProvider, ignoreCase = true) } ||
+                option.serverName.contains(prefProvider, ignoreCase = true) ||
+                option.label.contains(prefProvider, ignoreCase = true) ||
+                src.addonName?.contains(prefProvider, ignoreCase = true) == true ||
+                src.addonId?.contains(prefProvider, ignoreCase = true) == true
+
+        if (!isPreferredProvider) return false
+
         val url = src.url.lowercase()
         val isTorrent = option.isTorrent || src.infoHash != null || url.startsWith("magnet:") || url.startsWith("torrent:") || url.startsWith("torrent://") || com.euthopiar.core.p2p.extractP2pStreamRequest(src.url, src.infoHash) != null
         if (isTorrent && !hasDebrid) {
             val seeders = src.seeders ?: option.seeders ?: 0
-            if (seeders < 5) return false
+            if (seeders < 10) return false
+        }
+
+        // Resolution: Preferred quality is 1080p by default
+        val h = parseResolutionHeight(option.resolutionLabel.ifBlank { src.quality })
+        val matchesQuality = when {
+            h <= 0 -> false
+            prefHeight >= 2160 -> h == 1080 || h == 2160
+            else -> h == prefHeight || (prefHeight == 1080 && h == 720)
+        }
+        if (!matchesQuality) return false
+
+        // Audio language policy: Hindi-first priority
+        val combinedText = "${option.serverName} ${option.label} ${option.audioBadge.orEmpty()} ${src.url}".lowercase()
+        val prefLang = userPreferredAudioLanguage.ifBlank { "hi" }
+        if (prefLang.equals("hi", true) || prefLang.contains("hin", true)) {
+            val hasVerifiedHindi = src.audioTracks.any { it.isoCode.equals("hi", true) || it.languageName.contains("hindi", true) }
+            val hasHindiBadgeOrText = (option.audioBadge?.contains("HIN", true) == true) ||
+                    Regex("""\b(?:hin|hindi)\b""", RegexOption.IGNORE_CASE).containsMatchIn(combinedText)
+            val hasVerifiedNonHindiOnly = src.audioTracks.isNotEmpty() && !hasVerifiedHindi
+            if (hasVerifiedNonHindiOnly) return false
+
+            val origLang = currentOriginalLanguage?.lowercase()?.trim()
+            if (!origLang.isNullOrBlank() && origLang != "hi" && origLang != "hin") {
+                if (!hasVerifiedHindi && !hasHindiBadgeOrText) return false
+            }
+        }
+        return true
+    }
+
+    fun isPrimeCandidate(option: ServerSourceOption, hasDebrid: Boolean, prefHeight: Int = 1080): Boolean {
+        if (isPreferredAutoPlayCandidate(option, hasDebrid, prefHeight)) return true
+        val src = option.streamSource
+        if (src.matchScore > 0.0 && src.matchScore < 0.60) return false
+        val url = src.url.lowercase()
+        val isTorrent = option.isTorrent || src.infoHash != null || url.startsWith("magnet:") || url.startsWith("torrent:") || url.startsWith("torrent://") || com.euthopiar.core.p2p.extractP2pStreamRequest(src.url, src.infoHash) != null
+        if (isTorrent && !hasDebrid) {
+            val seeders = src.seeders ?: option.seeders ?: 0
+            if (seeders < 10) return false
         }
         val h = parseResolutionHeight(option.resolutionLabel.ifBlank { src.quality })
         if (h >= 2160 || h > 1080) return false // Strictly exclude 4K streams from prime candidates (1080p max for fast auto-play)
@@ -5677,8 +5817,8 @@ class PlayerViewModel(
                         } else {
                             val elapsedMs = nowMs - startTime
 
-                            // Fast-failover dead-swarm circuit breaker: If isP2p && elapsedMs >= 8_000L && peers == 0 && seeds == 0, trigger failover immediately at 8s
-                            if (isP2p && elapsedMs >= 8_000L && _uiState.value.p2pPeers == 0 && _uiState.value.p2pSeeds == 0) {
+                            // Fast-failover dead-swarm circuit breaker: If isP2p && elapsedMs >= 15_000L && peers == 0 && seeds == 0, trigger failover immediately at 15s
+                            if (isP2p && elapsedMs >= 15_000L && _uiState.value.p2pPeers == 0 && _uiState.value.p2pSeeds == 0) {
                                 android.util.Log.w("PlayerViewModel", "Dead swarm detected at ${elapsedMs}ms (0 peers, 0 seeds). Triggering circuit breaker failover.")
                                 bufferingStallStartTime = null
                                 triggerFailover("Dead torrent swarm (no seeds or peers)")
@@ -5722,8 +5862,8 @@ class PlayerViewModel(
                                     val p2pSpeed = _uiState.value.p2pDownloadSpeed
                                     val p2pBuf = _uiState.value.p2pBufferProgress
                                     val p2pPeers = _uiState.value.p2pPeers
-                                    if (p2pSpeed > 50 * 1024L || p2pBuf > lastP2pBufferProgress || p2pPeers > lastPeerCount) {
-                                        currentGracePeriodMs = (currentGracePeriodMs + 3000L).coerceAtMost(maxGraceMs)
+                                    if (p2pSpeed > 5 * 1024L || _uiState.value.p2pSeeds > 0 || p2pPeers > 0 || p2pBuf > lastP2pBufferProgress) {
+                                        currentGracePeriodMs = (currentGracePeriodMs + 5000L).coerceAtMost(maxGraceMs)
                                         android.util.Log.d("PlayerViewModel", "P2P ramp-up: speed=${p2pSpeed / 1024} KB/s, buf=$p2pBuf, peers=$p2pPeers. Extended grace to ${currentGracePeriodMs}ms (max ${maxGraceMs}ms)")
                                     }
                                     lastP2pBufferProgress = p2pBuf
@@ -5901,14 +6041,27 @@ class PlayerViewModel(
     }
 
     private fun triggerFailover(reason: String = "Buffering stalled") {
-        if (com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
+        if (reason == "Buffering stalled" && com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
             android.util.Log.d("PlayerViewModel", "triggerFailover blocked: source switching is forbidden for active playback session (reason=$reason)")
             bufferingStallStartTime = null
             return
         }
+        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().unlockForFailover()
         val currentServer = _uiState.value.selectedServer
         if (currentServer != null) {
             failedServerIds.add(currentServer.id)
+        }
+        if (failedServerIds.size >= 4) {
+            android.util.Log.w("PlayerViewModel", "Circuit breaker: Stopped failover thrashing after 4 attempts.")
+            bufferingStallStartTime = null
+            _uiState.update {
+                it.copy(
+                    isBuffering = false,
+                    isLoading = false,
+                    errorMessage = "Available servers are slow or buffering. You can choose another server from the servers list."
+                )
+            }
+            return
         }
         val prefHeight = sortPrefHeight
         val hasDebrid = isUserDebridActive()
@@ -5938,6 +6091,7 @@ class PlayerViewModel(
         } else {
             if (streamJob?.isActive == true) {
                 android.util.Log.d("PlayerViewModel", "triggerFailover: No fallback available yet, but streamJob is active. Waiting for more sources...")
+                hasStartedPlayback = false
                 _uiState.update {
                     it.copy(
                         isLoading = true,
@@ -6517,6 +6671,7 @@ class PlayerViewModel(
 
     fun onExitPlayer() {
         com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().endSession()
+        com.euthopiar.core.backend.session.BackendPlaybackSessionManager.getInstance().endSession()
         currentPlaybackSessionToken.incrementAndGet()
         val saveJob = savePlaybackProgress()
         playbackSyncCoordinator.onPlaybackEndedOrExited(saveJob)

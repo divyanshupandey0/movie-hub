@@ -901,11 +901,21 @@ open class ProviderRepository(
                                 )
                             }
 
+                            val parsedAudioDescriptors = stream.audioLanguages.map { lang ->
+                                val clean = lang.trim().lowercase()
+                                val isHin = clean == "hi" || clean == "hin" || clean == "hindi"
+                                AudioTrackDescriptor(
+                                    isoCode = if (isHin) "hi" else clean,
+                                    languageName = if (isHin) "Hindi" else lang
+                                )
+                            }
+
                             val src = StreamSource(
                                 serverName = serverLabel,
                                 url = url,
                                 quality = stream.quality ?: "Auto",
                                 isM3u8 = isM3u8Stream,
+                                audioTracks = parsedAudioDescriptors,
                                 headers = stream.headers,
                                 subtitles = subTracks,
                                 infoHash = stream.infoHash,

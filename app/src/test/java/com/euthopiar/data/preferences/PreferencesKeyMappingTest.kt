@@ -46,7 +46,7 @@ class PreferencesKeyMappingTest {
     fun testDefaultPlaybackAndGeneralPreferences() = runBlocking {
         // Quality
         val quality = repository.defaultQuality.first()
-        assertEquals("Auto", quality)
+        assertEquals("1080p", quality)
 
         // Auto-play next episode
         val autoPlay = repository.autoPlayNextEpisode.first()

@@ -243,3 +243,61 @@ data class RemotePlaybackReportEntry(
     @SerialName("switch_reason") val switchReason: String? = null,
     @SerialName("reported_at") val reportedAt: String? = null
 )
+
+@Serializable
+data class RemoteSourceCatalogEntry(
+    val id: String,
+    @SerialName("provider_id") val providerId: String,
+    @SerialName("media_id") val mediaId: String,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val title: String? = null,
+    val url: String,
+    val format: String = "auto",
+    val quality: String = "1080p",
+    @SerialName("audio_languages") val audioLanguages: List<String> = emptyList(),
+    @SerialName("has_hindi_audio") val hasHindiAudio: Boolean = false,
+    @SerialName("is_hindi_dubbed") val isHindiDubbed: Boolean = false,
+    @SerialName("is_multi_audio") val isMultiAudio: Boolean = false,
+    val status: String = "DISCOVERED",
+    @SerialName("content_match") val contentMatch: Boolean = false,
+    @SerialName("match_score") val matchScore: Double = 0.0,
+    @SerialName("verification_reason") val verificationReason: String? = null,
+    @SerialName("requires_headers") val requiresHeaders: Boolean = false,
+    @SerialName("headers") val headers: Map<String, String> = emptyMap(),
+    @SerialName("is_debrid") val isDebrid: Boolean = false,
+    @SerialName("is_p2p") val isP2p: Boolean = false,
+    @SerialName("info_hash") val infoHash: String? = null,
+    @SerialName("validation_latency_ms") val validationLatencyMs: Long = 0L,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null
+)
+
+@Serializable
+data class RemoteSourceValidationLogEntry(
+    val id: String? = null,
+    @SerialName("source_id") val sourceId: String? = null,
+    @SerialName("provider_id") val providerId: String,
+    @SerialName("media_id") val mediaId: String,
+    val url: String,
+    @SerialName("http_status") val httpStatus: Int? = null,
+    @SerialName("content_type") val contentType: String? = null,
+    @SerialName("is_valid") val isValid: Boolean = false,
+    @SerialName("validation_status") val validationStatus: String = "DISCOVERED",
+    @SerialName("latency_ms") val latencyMs: Long = 0L,
+    @SerialName("error_message") val errorMessage: String? = null,
+    @SerialName("headers_verified") val headersVerified: Map<String, String> = emptyMap(),
+    @SerialName("validated_at") val validatedAt: String? = null
+)
+
+@Serializable
+data class RemoteContentCacheEntry(
+    val key: String,
+    val category: String = "general",
+    val payload: kotlinx.serialization.json.JsonElement,
+    @SerialName("media_id") val mediaId: String? = null,
+    @SerialName("created_by") val createdBy: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String
+)

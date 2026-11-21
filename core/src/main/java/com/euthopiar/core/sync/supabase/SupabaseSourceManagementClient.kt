@@ -224,4 +224,53 @@ class SupabaseSourceManagementClient private constructor(
             Result.failure(e)
         }
     }
+
+    /**
+     * Logs URL validation results to source_validation_logs (or fallback to source_checks).
+     */
+    suspend fun logSourceValidation(entry: RemoteSourceValidationLogEntry): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val body = json.encodeToString(entry)
+            for (endpoint in listOf("source_validation_logs", "source_checks")) {
+                val req = buildRequest(endpoint)
+                    .post(body.toRequestBody(jsonMediaType))
+                    .build()
+
+                httpClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) return@withContext Result.success(Unit)
+                }
+            }
+            Result.failure(Exception("All validation log endpoints unavailable"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Queries verified backend sources for a given media from source_catalog.
+     */
+    suspend fun queryBackendSources(
+        mediaId: String,
+        season: Int? = null,
+        episode: Int? = null
+    ): Result<List<RemoteSourceCatalogEntry>> = withContext(Dispatchers.IO) {
+        try {
+            val seasonFilter = if (season != null) "&season=eq.$season" else ""
+            val episodeFilter = if (episode != null) "&episode=eq.$episode" else ""
+            val endpoint = "source_catalog?media_id=eq.$mediaId$seasonFilter$episodeFilter&status=in.(VERIFIED,PARTIALLY_VERIFIED)&select=*"
+            val req = buildRequest(endpoint).get().build()
+
+            httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
+                    val sources = json.decodeFromString<List<RemoteSourceCatalogEntry>>(body)
+                    Result.success(sources)
+                } else {
+                    Result.failure(Exception("HTTP ${resp.code}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

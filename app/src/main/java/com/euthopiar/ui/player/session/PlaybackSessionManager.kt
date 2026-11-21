@@ -120,6 +120,13 @@ class PlaybackSessionManager private constructor() {
         }
     }
 
+    fun unlockForFailover() {
+        synchronized(this) {
+            isSourceLocked = false
+            Log.d(TAG, "Source UNLOCKED for failover in session $currentSessionId")
+        }
+    }
+
     /**
      * Called when the user initiates a seek (scrub, forward/backward jump).
      */
