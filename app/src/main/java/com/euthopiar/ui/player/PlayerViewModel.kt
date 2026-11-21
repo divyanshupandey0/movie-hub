@@ -1040,7 +1040,13 @@ class PlayerViewModel(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                _uiState.update { it.copy(isPlaying = isPlaying) }
+                _uiState.update { 
+                    it.copy(
+                        isPlaying = isPlaying,
+                        isBuffering = if (isPlaying) false else it.isBuffering,
+                        isLoading = if (isPlaying) false else it.isLoading
+                    ) 
+                }
                 if (isPlaying) {
                     resetAutoHideTimer()
                     applyDialogueBoost()
@@ -2169,9 +2175,10 @@ class PlayerViewModel(
                                 val needsStart = !userExplicitServerSelection && (!hasStartedPlayback || _uiState.value.errorMessage != null || _uiState.value.userError != null || isCurFailed)
                                 val curScore = curSelected?.let { scoreServerForInitialAutoPlay(it, hasDebrid, prefHeight) } ?: -9999.0
                                 val newScore = scoreServerForInitialAutoPlay(option, hasDebrid, prefHeight)
-                                val canUpgradeToPreferred = !userExplicitServerSelection && !videoFrameRendered && (newScore > curScore + 50.0) && isPreferredAutoPlayCandidate(option, hasDebrid, prefHeight)
+                                val isSessionProtected = com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().shouldBlockBackgroundStreamOverwrite()
+                                val canUpgradeToPreferred = !userExplicitServerSelection && !videoFrameRendered && !hasStartedPlayback && !isSessionProtected && (newScore > curScore + 50.0) && isPreferredAutoPlayCandidate(option, hasDebrid, prefHeight)
 
-                                if (canUpgradeToPreferred || (needsStart && isPrimeCandidate(option, hasDebrid, prefHeight))) {
+                                if (canUpgradeToPreferred || (!isSessionProtected && needsStart && isPrimeCandidate(option, hasDebrid, prefHeight))) {
                                     // Immediate 0ms start for prime / preferred candidate
                                     fastStartJob?.cancel()
                                     fastStartJob = null
@@ -3634,7 +3641,9 @@ class PlayerViewModel(
 
             // Runtime Hindi Verification (Section B, C & G):
             // If user requires Hindi, but the stream contains NO Hindi audio track:
-            if (isHindiPref && hindiTrack == null && !userExplicitServerSelection) {
+            // Only check on initial stream startup before playback begins. NEVER failover once playback has started or during seeking.
+            val sessionProtected = com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()
+            if (isHindiPref && hindiTrack == null && !userExplicitServerSelection && !hasStartedPlayback && !videoFrameRendered && !sessionProtected) {
                 val nonAutoTracks = detectedAudio.filter { !it.isAuto }
                 if (nonAutoTracks.isNotEmpty()) {
                     val curServer = _uiState.value.selectedServer
@@ -5362,7 +5371,7 @@ class PlayerViewModel(
         com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekStarted(clamped)
         android.util.Log.d("PlayerViewModel", "seekTo: target=$positionMs, clamped=$clamped, duration=$effectiveDuration, isSeekable=${player.isCurrentMediaItemSeekable}")
         player.seekTo(clamped)
-        _uiState.update { it.copy(currentPositionMs = clamped, isScrubbing = false) }
+        _uiState.update { it.copy(currentPositionMs = clamped, isScrubbing = false, isBuffering = true) }
         updateSubtitleForPosition(clamped)
         resetAutoHideTimer()
         savePlaybackProgress()
@@ -5379,23 +5388,16 @@ class PlayerViewModel(
         com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().onSeekStarted(newPos)
         android.util.Log.d("PlayerViewModel", "seekRelative: delta=$deltaMs, current=$current, target=$newPos, duration=$effectiveDuration, isSeekable=${player.isCurrentMediaItemSeekable}")
         pendingSeekTargetMs = newPos
-        _uiState.update { it.copy(currentPositionMs = newPos) }
+        _uiState.update { it.copy(currentPositionMs = newPos, isBuffering = true) }
         updateSubtitleForPosition(newPos)
         resetAutoHideTimer()
 
         seekDebounceJob?.cancel()
         seekDebounceJob = viewModelScope.launch {
-            delay(150L)
+            delay(180L)
             val seekTarget = pendingSeekTargetMs ?: newPos
+            pendingSeekTargetMs = null
             player.seekTo(seekTarget)
-            delay(250L)
-            if (pendingSeekTargetMs == seekTarget) {
-                // If player was seeked forward and erroneously snapped back to 0, ensure target is maintained
-                if (seekTarget > 3000L && player.currentPosition < 1000L) {
-                    player.seekTo(seekTarget)
-                }
-                pendingSeekTargetMs = null
-            }
         }
     }
 
@@ -5795,6 +5797,12 @@ class PlayerViewModel(
                         }
 
                         val startTime = bufferingStallStartTime
+                        val sessionMgr = com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance()
+                        if (sessionMgr.isSourceSwitchingForbidden() || sessionMgr.isSeeking || (hasStartedPlayback && videoFrameRendered)) {
+                            // Seeking, buffering, playback position changes, and temporary network delays must NOT trigger source failover.
+                            bufferingStallStartTime = null
+                            return@let
+                        }
                         if (startTime == null) {
                             bufferingStallStartTime = nowMs
                             lastVelocityCheckTimeMs = nowMs
@@ -6041,12 +6049,14 @@ class PlayerViewModel(
     }
 
     private fun triggerFailover(reason: String = "Buffering stalled") {
-        if (reason == "Buffering stalled" && com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().isSourceSwitchingForbidden()) {
+        val sessionMgr = com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance()
+        if (sessionMgr.isSourceSwitchingForbidden() || sessionMgr.isSeeking || (hasStartedPlayback && videoFrameRendered)) {
             android.util.Log.d("PlayerViewModel", "triggerFailover blocked: source switching is forbidden for active playback session (reason=$reason)")
             bufferingStallStartTime = null
+            _uiState.update { it.copy(isBuffering = exoPlayer?.playbackState == Player.STATE_BUFFERING, isLoading = false) }
             return
         }
-        com.euthopiar.ui.player.session.PlaybackSessionManager.getInstance().unlockForFailover()
+        sessionMgr.unlockForFailover()
         val currentServer = _uiState.value.selectedServer
         if (currentServer != null) {
             failedServerIds.add(currentServer.id)

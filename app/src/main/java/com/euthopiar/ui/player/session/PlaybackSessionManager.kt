@@ -143,6 +143,7 @@ class PlaybackSessionManager private constructor() {
     fun onSeekCompleted(currentPositionMs: Long) {
         isUserSeeking = false
         lastPlaybackPositionMs = currentPositionMs
+        lastSeekTimestampMs = System.currentTimeMillis()
         Log.d(TAG, "Seek completed at ${currentPositionMs}ms.")
     }
 
@@ -157,18 +158,20 @@ class PlaybackSessionManager private constructor() {
 
     fun getLastPlaybackPosition(): Long = lastPlaybackPositionMs
 
+    val isSeeking: Boolean get() = isUserSeeking
+    val isPlaybackActive: Boolean get() = isPlaybackStarted || isSourceLocked
+
     /**
      * Returns true if source is locked and must NOT be automatically switched.
      * Prevents unexpected source switching during seeking or temporary buffering.
      */
     fun isSourceSwitchingForbidden(): Boolean {
-        if (!isSourceLocked) return false
         if (isUserSeeking) return true
         val timeSinceSeek = System.currentTimeMillis() - lastSeekTimestampMs
         if (timeSinceSeek in 0L..SEEK_GRACE_WINDOW_MS) {
             return true
         }
-        return isSourceLocked
+        return isSourceLocked || isPlaybackStarted
     }
 
     /**

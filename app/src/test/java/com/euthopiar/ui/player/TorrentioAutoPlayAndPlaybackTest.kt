@@ -164,7 +164,7 @@ class TorrentioAutoPlayAndPlaybackTest {
         assertEquals("Torrentio", preferencesRepo.activeProvider.first())
         assertEquals("hi", preferencesRepo.preferredAudioLanguage.first())
         assertEquals("en", preferencesRepo.secondaryAudioLanguage.first())
-        assertEquals("Auto", preferencesRepo.defaultQuality.first())
+        assertEquals("1080p", preferencesRepo.defaultQuality.first())
         assertTrue(preferencesRepo.autoSourceSelection.first())
         assertTrue(preferencesRepo.smartFailoverEnabled.first())
         assertTrue(viewModel.uiState.value.smartFailoverEnabled)

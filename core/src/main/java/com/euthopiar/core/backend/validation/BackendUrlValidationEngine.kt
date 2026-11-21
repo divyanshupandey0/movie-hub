@@ -171,7 +171,7 @@ object BackendUrlValidationEngine {
         try {
             val reqBuilder = Request.Builder()
                 .url(cleanUrl)
-                .header("User-Agent", headers["User-Agent"] ?: "MovieHub/2.0.6 (Android; Linux; OkHttp)")
+                .header("User-Agent", headers["User-Agent"] ?: "MovieHub/2.0.7 (Android; Linux; OkHttp)")
                 .header("Range", "bytes=0-2048")
 
             headers.forEach { (k, v) ->

@@ -317,6 +317,7 @@ class PreferencesRepository private constructor(private val context: Context) {
             preferences[PreferencesKeys.CONTENT_REGION_PRESET] = preset.id
         }
         com.euthopiar.core.util.TmdbBridge.activeRegionPreset = preset
+        com.euthopiar.core.util.TmdbBridge.clearHomeCatalogCache()
     }
 
     val cardScaleMode: Flow<CardScaleMode> = context.preferencesDataStore.data

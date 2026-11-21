@@ -68,6 +68,11 @@ class EuthopiarApp : Application(), SingletonImageLoader.Factory {
                 launch(Dispatchers.IO) {
                     prefsRepo.initializeDefaultAppearancePreferences()
                 }
+                launch(Dispatchers.IO) {
+                    prefsRepo.contentRegionPreset.collect { preset ->
+                        com.euthopiar.core.util.TmdbBridge.activeRegionPreset = preset
+                    }
+                }
                 launch {
                     kotlinx.coroutines.flow.combine(
                         prefsRepo.debridEnabled,

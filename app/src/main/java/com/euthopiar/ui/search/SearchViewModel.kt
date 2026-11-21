@@ -107,7 +107,13 @@ class SearchViewModel(
     private var searchJob: Job? = null
 
     init {
-        loadTrending()
+        viewModelScope.launch {
+            preferencesRepository.contentRegionPreset.collect { preset ->
+                com.euthopiar.core.util.TmdbBridge.activeRegionPreset = preset
+                _cachedTrendingItems.value = emptyList()
+                loadTrending(forceRefresh = true)
+            }
+        }
     }
 
     fun setTypeFilter(type: MediaType?) {
@@ -182,11 +188,11 @@ class SearchViewModel(
         }
     }
 
-    fun loadTrending() {
+    fun loadTrending(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             if (currentQuery.value.isNotBlank() && isResultsActive.value) return@launch
             val cached = _cachedTrendingItems.value
-            if (cached.isNotEmpty()) {
+            if (!forceRefresh && cached.isNotEmpty()) {
                 if (currentQuery.value.isBlank() || !isResultsActive.value) {
                     _uiState.value = SearchUiState.Trending(items = cached, isLoading = false)
                 }

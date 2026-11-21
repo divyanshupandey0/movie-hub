@@ -255,7 +255,7 @@ class MovieHubPlaybackIntegrityTest {
         assertEquals("Torrentio", preferencesRepo.activeProvider.first())
         assertEquals("hi", preferencesRepo.preferredAudioLanguage.first())
         assertEquals("en", preferencesRepo.secondaryAudioLanguage.first())
-        assertEquals("Auto", preferencesRepo.defaultQuality.first())
+        assertEquals("1080p", preferencesRepo.defaultQuality.first())
         assertTrue(preferencesRepo.autoSourceSelection.first())
         assertTrue(preferencesRepo.smartFailoverEnabled.first())
         assertFalse("Official repository must not auto-install without user consent", preferencesRepo.autoOfficialRepoInstall.first())

@@ -575,10 +575,18 @@ object TmdbBridge {
         language: String = "en-US",
         client: OkHttpClient = DohDns.metadataClient,
         apiKey: String = DEFAULT_API_KEY,
-        dispatcher: CoroutineDispatcher = Dispatchers.IO
+        dispatcher: CoroutineDispatcher = Dispatchers.IO,
+        preset: ContentRegionPreset = activeRegionPreset
     ): List<MediaItem> = withContext(dispatcher) {
         try {
-            val url = appendApiKey("$BASE_URL/trending/all/$timeWindow?language=$language", apiKey)
+            val url = if (preset == ContentRegionPreset.GLOBAL) {
+                appendApiKey("$BASE_URL/trending/all/$timeWindow?language=$language", apiKey)
+            } else {
+                val langParam = preset.originalLanguages?.let { "with_original_language=$it&" } ?: ""
+                val regionParam = preset.regionCode?.let { "region=$it&" } ?: ""
+                val todayStr = java.time.LocalDate.now().toString()
+                appendApiKey("$BASE_URL/discover/movie?${langParam}${regionParam}sort_by=popularity.desc&primary_release_date.lte=$todayStr", apiKey)
+            }
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", DEFAULT_USER_AGENT)
@@ -2112,6 +2120,7 @@ object TmdbBridge {
                 FeedDef("Trending Movies", appendApiKey("$BASE_URL/trending/movie/week", apiKey), resolveLogos = true, eyebrow = "MOVIES", subtitle = "Most popular movies this week"),
                 FeedDef("Popular Movies", appendApiKey("$BASE_URL/movie/popular", apiKey), resolveLogos = true, eyebrow = "POPULAR", subtitle = "Global box office hits"),
                 FeedDef("Popular TV Shows", appendApiKey("$BASE_URL/tv/popular", apiKey), resolveLogos = true, eyebrow = "SERIES", subtitle = "Top television & web series"),
+                FeedDef("Upcoming Releases", appendApiKey("$BASE_URL/movie/upcoming", apiKey), resolveLogos = false, eyebrow = "UPCOMING", subtitle = "Anticipated upcoming releases"),
                 FeedDef("Top Rated Movies", appendApiKey("$BASE_URL/movie/top_rated", apiKey), resolveLogos = false, eyebrow = "TOP RATED", subtitle = "Highest rated by audiences"),
                 FeedDef("Binge-Worthy TV Series", appendApiKey("$BASE_URL/trending/tv/week", apiKey), resolveLogos = false, eyebrow = "BINGE", subtitle = "Trending series this week")
             )
@@ -2126,6 +2135,7 @@ object TmdbBridge {
             val streamingOttNetworks = "213|1024|3919|2739|3422|2590|4768|2162|3698|2235|3144|2420|2552"
             feeds.add(FeedDef("Popular South Indian Web Series", appendApiKey("$BASE_URL/discover/tv?with_original_language=$teTaMlKn&with_networks=$streamingOttNetworks&without_genres=10766&sort_by=popularity.desc", apiKey), resolveLogos = true, eyebrow = "WEB SERIES", subtitle = "Regional OTT originals & streaming series"))
             feeds.add(FeedDef("South Indian Television Serials", appendApiKey("$BASE_URL/discover/tv?with_original_language=$teTaMlKn&sort_by=popularity.desc&first_air_date.lte=$todayStr", apiKey), resolveLogos = false, eyebrow = "TV SERIALS", subtitle = "Daily broadcast serials & television shows"))
+            feeds.add(FeedDef("Upcoming South Indian Cinema", appendApiKey("$BASE_URL/discover/movie?with_original_language=$teTaMlKn&region=IN&sort_by=popularity.desc&primary_release_date.gt=$todayStr", apiKey), resolveLogos = false, eyebrow = "UPCOMING", subtitle = "Anticipated South Indian releases"))
             feeds.add(FeedDef("Top Rated South Indian Cinema", appendApiKey("$BASE_URL/discover/movie?with_original_language=$teTaMlKn&sort_by=vote_average.desc&vote_count.gte=30", apiKey), resolveLogos = false, eyebrow = "TOP RATED", subtitle = "Highest rated South Indian movies"))
             feeds.add(FeedDef("South Indian Action Hits", appendApiKey("$BASE_URL/discover/movie?with_original_language=$teTaMlKn&with_genres=28,12&sort_by=popularity.desc", apiKey), resolveLogos = false, eyebrow = "ACTION", subtitle = "High-octane mass action"))
             feeds.add(FeedDef("South Indian Thrillers", appendApiKey("$BASE_URL/discover/movie?with_original_language=$teTaMlKn&with_genres=53&sort_by=popularity.desc", apiKey), resolveLogos = false, eyebrow = "THRILLER", subtitle = "Edge-of-the-seat suspense & crime"))
@@ -2148,6 +2158,7 @@ object TmdbBridge {
             val streamingOttNetworks = "213|1024|3919|2739|3422|2590|4768|2162|3698|2235|3144|2420|2552"
             feeds.add(FeedDef("Popular Indian Web Series", appendApiKey("$BASE_URL/discover/tv?with_original_language=$allIndiaLangs&with_networks=$streamingOttNetworks&without_genres=10766&sort_by=popularity.desc", apiKey), resolveLogos = true, eyebrow = "WEB SERIES", subtitle = "Trending Indian OTT originals & web series"))
             feeds.add(FeedDef("Indian Television Serials", appendApiKey("$BASE_URL/discover/tv?with_original_language=$allIndiaLangs&sort_by=popularity.desc&first_air_date.lte=$todayStr", apiKey), resolveLogos = false, eyebrow = "TV SERIALS", subtitle = "Popular broadcast television serials & daily soaps"))
+            feeds.add(FeedDef("Upcoming Indian Releases", appendApiKey("$BASE_URL/discover/movie?with_original_language=$allIndiaLangs&region=IN&sort_by=popularity.desc&primary_release_date.gt=$todayStr", apiKey), resolveLogos = false, eyebrow = "UPCOMING", subtitle = "Anticipated Indian releases"))
             feeds.add(FeedDef("Top Rated Indian Cinema", appendApiKey("$BASE_URL/discover/movie?with_original_language=$allIndiaLangs&sort_by=vote_average.desc&vote_count.gte=40", apiKey), resolveLogos = false, eyebrow = "TOP RATED", subtitle = "All-time highest rated Indian films"))
             feeds.add(FeedDef("Indian Action & Masala", appendApiKey("$BASE_URL/discover/movie?with_original_language=$allIndiaLangs&with_genres=28,12&sort_by=popularity.desc", apiKey), resolveLogos = false, eyebrow = "ACTION", subtitle = "High energy action entertainers"))
             feeds.add(FeedDef("Indian Thrillers & Mysteries", appendApiKey("$BASE_URL/discover/movie?with_original_language=$allIndiaLangs&with_genres=53,80&sort_by=popularity.desc", apiKey), resolveLogos = false, eyebrow = "THRILLER", subtitle = "Suspense & crime investigations"))
@@ -2172,6 +2183,7 @@ object TmdbBridge {
             } else {
                 feeds.add(FeedDef("Popular $cleanName Series", appendApiKey("$BASE_URL/discover/tv?${langParam}sort_by=popularity.desc&first_air_date.lte=$todayStr", apiKey), resolveLogos = true, eyebrow = "SERIES", subtitle = "Top rated $cleanName television & series"))
             }
+            feeds.add(FeedDef("Upcoming $cleanName Releases", appendApiKey("$BASE_URL/discover/movie?${langParam}${regionParam}sort_by=popularity.desc&primary_release_date.gt=$todayStr", apiKey), resolveLogos = false, eyebrow = "UPCOMING", subtitle = "Anticipated $cleanName releases"))
             feeds.add(FeedDef("Top Rated $cleanName Cinema", appendApiKey("$BASE_URL/discover/movie?${langParam}sort_by=vote_average.desc&vote_count.gte=20", apiKey), resolveLogos = false, eyebrow = "TOP RATED", subtitle = "Critically acclaimed $cleanName titles"))
             feeds.add(FeedDef("$cleanName Action Blockbusters", appendApiKey("$BASE_URL/discover/movie?${langParam}with_genres=28,12&sort_by=popularity.desc", apiKey), resolveLogos = false, eyebrow = "ACTION", subtitle = "Action & thrillers from $cleanName"))
             feeds.add(FeedDef("$cleanName Thrillers & Suspense", appendApiKey("$BASE_URL/discover/movie?${langParam}with_genres=53&sort_by=popularity.desc", apiKey), resolveLogos = false, eyebrow = "THRILLER", subtitle = "Suspenseful mysteries & investigations"))
@@ -2287,12 +2299,14 @@ object TmdbBridge {
     suspend fun searchMulti(
         client: OkHttpClient,
         query: String,
-        apiKey: String = DEFAULT_API_KEY
+        apiKey: String = DEFAULT_API_KEY,
+        region: String? = activeRegionPreset.regionCode
     ): List<MediaItem> = withContext(Dispatchers.IO) {
         val clean = query.trim()
         if (clean.isBlank()) return@withContext emptyList()
         val encoded = URLEncoder.encode(clean, "UTF-8")
-        val url = appendApiKey("$BASE_URL/search/multi?query=$encoded&include_adult=false", apiKey)
+        val regionParam = region?.let { "&region=$it" } ?: ""
+        val url = appendApiKey("$BASE_URL/search/multi?query=$encoded&include_adult=false$regionParam", apiKey)
 
         try {
             val req = Request.Builder().url(url).header("User-Agent", DEFAULT_USER_AGENT).build()
